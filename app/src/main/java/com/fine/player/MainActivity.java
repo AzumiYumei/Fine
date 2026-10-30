@@ -45,6 +45,9 @@ public final class MainActivity extends Activity {
     private boolean currentOffline, resumePlayback;
     private long position;
     private String lastRows = "";
+    private boolean querying;
+    private final Map<String, TextView> rowStatus = new HashMap<>();
+    private final Map<String, ProgressBar> rowProgress = new HashMap<>();
     private final Runnable refresh = new Runnable() {
         @Override public void run() { renderDownloads(); handler.postDelayed(this, 1000); }
     };
@@ -97,7 +100,16 @@ public final class MainActivity extends Activity {
         downloadButton = button("下载", false, v -> download());
         actions.addView(downloadButton, weighted());
         add(input, actions, 12);
-        add(input, text("支持 HTTP / HTTPS；下载使用当前网络", 12, Color.GRAY), 10);
+        add(input, text("不限速 · 自动重试 3 次 · 使用当前网络", 12, Color.GRAY), 10);
+        Button concurrency = button("下载并发：" + app.parallelism() + " 线程", false, null);
+        concurrency.setOnClickListener(v -> {
+            int[] values = {2, 4, 6, 8};
+            new AlertDialog.Builder(this).setTitle("分片并发（下次开始或继续时生效）")
+                    .setItems(new String[]{"2 线程 · 较少占用", "4 线程", "6 线程 · 默认", "8 线程"}, (dialog, which) -> {
+                        app.parallelism(values[which]); concurrency.setText("下载并发：" + values[which] + " 线程");
+                    }).show();
+        });
+        add(input, concurrency, 6);
 
         playerView = new PlayerView(this);
         playerView.setBackgroundColor(Color.rgb(18, 29, 29));
@@ -164,7 +176,11 @@ public final class MainActivity extends Activity {
                 status.setText(getString(R.string.playback_error, error.getErrorCodeName()));
             }
         });
-        player.setMediaItem(currentItem, position);
+        if (currentOffline) {
+            java.util.Set<String> gaps = app.problems().skipped(Links.id(currentItem.localConfiguration.uri.toString()));
+            player.setMediaSource(new androidx.media3.exoplayer.hls.HlsMediaSource.Factory(app.source(true))
+                    .setPlaylistParserFactory(GapPlaylistParser.factory(gaps)).createMediaSource(currentItem), position);
+        } else player.setMediaItem(currentItem, position);
         player.prepare();
         player.setPlayWhenReady(resumePlayback);
     }
@@ -218,21 +234,42 @@ public final class MainActivity extends Activity {
     }
 
     private void renderDownloads() {
-        List<Download> entries = new ArrayList<>();
+        if (querying) return;
+        querying = true;
         Map<String, Download> active = new HashMap<>();
         for (Download d : app.downloads().getCurrentDownloads()) active.put(d.request.id, d);
-        StringBuilder signature = new StringBuilder();
-        try (DownloadCursor cursor = app.downloads().getDownloadIndex().getDownloads()) {
-            while (cursor.moveToNext()) {
-                Download saved = cursor.getDownload();
-                Download d = active.containsKey(saved.request.id) ? active.get(saved.request.id) : saved;
-                entries.add(d);
-                signature.append(d.request.id).append(':').append(d.state).append(':').append(d.getBytesDownloaded()).append(';');
+        app.queries.execute(() -> {
+            List<Download> entries = new ArrayList<>();
+            try (DownloadCursor cursor = app.downloads().getDownloadIndex().getDownloads()) {
+                while (cursor.moveToNext()) {
+                    Download saved = cursor.getDownload();
+                    entries.add(active.containsKey(saved.request.id) ? active.get(saved.request.id) : saved);
+                }
+                handler.post(() -> { querying = false; if (!isDestroyed()) showDownloads(entries); });
+            } catch (IOException e) {
+                handler.post(() -> { querying = false; if (!isDestroyed()) status.setText("无法读取下载记录"); });
             }
-        } catch (IOException e) { status.setText("无法读取下载记录，请重新打开应用"); return; }
-        signature.append(app.downloads().getNotMetRequirements());
-        if (signature.toString().equals(lastRows)) return;
+        });
+    }
+    private void updateProgress(Download d) {
+        TextView label = rowStatus.get(d.request.id);
+        if (label != null) label.setText(stateText(d) + " · " + String.format(Locale.CHINA, "%.1f MB", d.getBytesDownloaded() / 1048576.0)
+                + (app.problems().skipped(d.request.id).isEmpty() ? "" : " · 已丢弃 " + app.problems().skipped(d.request.id).size() + " 片（视频缺段）"));
+        ProgressBar progress = rowProgress.get(d.request.id);
+        if (progress != null) {
+            progress.setProgress(d.state == Download.STATE_COMPLETED ? 100 : Math.max(0, (int) d.getPercentDownloaded()));
+            progress.setIndeterminate(d.state == Download.STATE_DOWNLOADING && d.getPercentDownloaded() < 0);
+        }
+    }
+    private void showDownloads(List<Download> entries) {
+        StringBuilder signature = new StringBuilder();
+        for (Download d : entries) signature.append(d.request.id).append(':').append(d.state).append(';');
+        if (signature.toString().equals(lastRows) && !rowStatus.isEmpty()) {
+            for (Download d : entries) updateProgress(d);
+            return;
+        }
         lastRows = signature.toString();
+        rowStatus.clear(); rowProgress.clear();
         list.removeAllViews();
         if (entries.isEmpty()) { list.addView(empty); return; }
         for (Download d : entries) {
@@ -240,21 +277,31 @@ public final class MainActivity extends Activity {
             add(list, card, 8);
             String name = new String(d.request.data, StandardCharsets.UTF_8);
             card.addView(text(name.isEmpty() ? "视频" : name, 17, ink));
-            add(card, text(stateText(d) + " · " + String.format(Locale.CHINA, "%.1f MB", d.getBytesDownloaded() / 1048576.0), 13, green), 6);
+            TextView detail = text("", 13, green);
+            rowStatus.put(d.request.id, detail);
+            add(card, detail, 6);
             ProgressBar progress = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
             progress.setMax(100);
+            rowProgress.put(d.request.id, progress);
             progress.setProgress(d.state == Download.STATE_COMPLETED ? 100 : Math.max(0, (int) d.getPercentDownloaded()));
             progress.setIndeterminate(d.state == Download.STATE_DOWNLOADING && d.getPercentDownloaded() < 0);
             add(card, progress, 8);
+            updateProgress(d);
             LinearLayout actions = row();
             if (d.state == Download.STATE_COMPLETED) {
                 actions.addView(button("离线播放", true, v -> play(d.request.toMediaItem(), true)), weighted());
             } else if (d.state == Download.STATE_FAILED) {
-                actions.addView(button("重试", false, v -> DownloadService.sendAddDownload(this, VideoDownloadService.class, d.request, false)), weighted());
+                actions.addView(button("处理失败", false, v -> handleFailures(d)), weighted());
             } else if (d.state != Download.STATE_REMOVING) {
                 boolean stopped = d.stopReason != Download.STOP_REASON_NONE;
                 actions.addView(button(stopped ? "继续" : "暂停", false, v ->
                         DownloadService.sendSetStopReason(this, VideoDownloadService.class, d.request.id, stopped ? 0 : 1, false)), weighted());
+            }
+            if ((d.state == Download.STATE_COMPLETED || d.state == Download.STATE_FAILED) && !app.problems().skipped(d.request.id).isEmpty()) {
+                actions.addView(button("补全", false, v -> {
+                    app.problems().restore(d.request.id);
+                    DownloadService.sendAddDownload(this, VideoDownloadService.class, d.request, false);
+                }), weighted());
             }
             actions.addView(button("删除", false, v -> new AlertDialog.Builder(this)
                     .setTitle("删除下载？").setMessage("将移除此视频和本地下载文件。")
@@ -268,12 +315,33 @@ public final class MainActivity extends Activity {
             add(card, actions, 8);
         }
     }
+    private void handleFailures(Download d) {
+        List<DownloadProblems.Failure> failures = app.problems().failures(d.request.id);
+        String[] labels = new String[failures.size()];
+        boolean[] selected = new boolean[failures.size()];
+        for (int i = 0; i < labels.length; i++) labels[i] = failures.get(i).label + (failures.get(i).skippable ? "" : "（不可丢弃）");
+        new AlertDialog.Builder(this).setTitle("失败资源 " + failures.size() + " 个")
+                .setMultiChoiceItems(labels, selected, (dialog, which, checked) -> selected[which] = checked)
+                .setNegativeButton("取消", null)
+                .setNeutralButton("重试失败资源", (dialog, which) -> DownloadService.sendAddDownload(this, VideoDownloadService.class, d.request, false))
+                .setPositiveButton("丢弃勾选分片", (dialog, which) -> {
+                    Set<String> ids = new HashSet<>();
+                    for (int i = 0; i < selected.length; i++) if (selected[i] && failures.get(i).skippable) ids.add(failures.get(i).id);
+                    if (ids.isEmpty()) { message("请勾选可丢弃的视频分片；密钥和播放列表不可丢弃"); return; }
+                    new AlertDialog.Builder(this).setTitle("丢弃 " + ids.size() + " 个分片？")
+                            .setMessage("视频会缺少这些片段，播放可能出现跳跃或短暂无画面。已下载内容保留。")
+                            .setNegativeButton("取消", null).setPositiveButton("丢弃并继续", (confirm, action) -> {
+                                app.problems().discard(d.request.id, ids);
+                                DownloadService.sendAddDownload(this, VideoDownloadService.class, d.request, false);
+                            }).show();
+                }).show();
+    }
     private String stateText(Download d) {
         switch (d.state) {
             case Download.STATE_COMPLETED: return "已完成";
             case Download.STATE_DOWNLOADING: return d.getPercentDownloaded() < 0 ? "下载中" : String.format(Locale.CHINA, "下载中 %.0f%%", d.getPercentDownloaded());
             case Download.STATE_STOPPED: return "已暂停";
-            case Download.STATE_FAILED: return "下载失败，请检查网络、链接或剩余空间";
+            case Download.STATE_FAILED: return "部分资源失败 · 可重试或丢弃分片";
             case Download.STATE_REMOVING: return "删除中";
             default: return app.downloads().getNotMetRequirements() != 0 ? "等待网络" : "排队中";
         }
