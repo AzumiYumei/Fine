@@ -1,0 +1,12 @@
+<resources>
+    <item name="download_page" type="id" />
+    <item name="library_page" type="id" />
+    <item name="download_tab" type="id" />
+    <item name="library_tab" type="id" />
+    <item name="video_url" type="id" />
+    <item name="video_title" type="id" />
+    <item name="play_online" type="id" />
+    <item name="player_view" type="id" />
+    <item name="player_header" type="id" />
+    <item name="fullscreen_toggle" type="id" />
+</resources>

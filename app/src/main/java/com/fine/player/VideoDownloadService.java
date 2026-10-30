@@ -20,7 +20,8 @@ public final class VideoDownloadService extends DownloadService {
     }
     @Override protected Scheduler getScheduler() { return null; }
     @Override protected Notification getForegroundNotification(List<Download> downloads, int requirements) {
-        PendingIntent open = PendingIntent.getActivity(this, 0, new Intent(this, MainActivity.class),
+        PendingIntent open = PendingIntent.getActivity(this, 0, new Intent(this, MainActivity.class)
+                        .putExtra("page", 1).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP),
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
         return new DownloadNotificationHelper(this, "fine_downloads")
                 .buildProgressNotification(this, R.drawable.ic_download, open, "Fine · 离线视频", downloads, requirements);

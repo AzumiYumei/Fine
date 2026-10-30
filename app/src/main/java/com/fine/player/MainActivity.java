@@ -14,17 +14,11 @@ import android.os.Handler;
 import android.os.Looper;
 import android.text.InputType;
 import android.view.View;
-import android.view.WindowManager;
 import android.widget.*;
 import androidx.media3.common.MediaItem;
 import androidx.media3.common.MimeTypes;
-import androidx.media3.common.PlaybackException;
-import androidx.media3.common.Player;
 import androidx.media3.exoplayer.DefaultRenderersFactory;
-import androidx.media3.exoplayer.ExoPlayer;
 import androidx.media3.exoplayer.offline.*;
-import androidx.media3.exoplayer.source.DefaultMediaSourceFactory;
-import androidx.media3.ui.PlayerView;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
@@ -38,18 +32,17 @@ public final class MainActivity extends Activity {
     private TextView status, empty;
     private LinearLayout list;
     private Button downloadButton;
-    private PlayerView playerView;
-    private ExoPlayer player;
     private DownloadHelper preparing;
-    private MediaItem currentItem;
-    private boolean currentOffline, resumePlayback;
-    private long position;
+    private ScrollView downloadPage, libraryPage;
+    private Button downloadTab, libraryTab;
+    private int page;
+    private boolean visible;
     private String lastRows = "";
     private boolean querying;
     private final Map<String, TextView> rowStatus = new HashMap<>();
     private final Map<String, ProgressBar> rowProgress = new HashMap<>();
     private final Runnable refresh = new Runnable() {
-        @Override public void run() { renderDownloads(); handler.postDelayed(this, 1000); }
+        @Override public void run() { if (visible && page == 1) { renderDownloads(); handler.postDelayed(this, 1000); } }
     };
 
     @Override public void onCreate(Bundle state) {
@@ -61,42 +54,66 @@ public final class MainActivity extends Activity {
             url.setText(state.getString("url", ""));
             title.setText(state.getString("title", ""));
         }
+        showPage(state != null ? state.getInt("page", 0) : getIntent().getIntExtra("page", 0));
         app.downloads();
         DownloadService.sendResumeDownloads(this, VideoDownloadService.class, false);
     }
 
     private void buildUi() {
-        ScrollView scroll = new ScrollView(this);
-        scroll.setFillViewport(true);
+        LinearLayout shell = column();
+        FrameLayout pages = new FrameLayout(this);
+        shell.addView(pages, new LinearLayout.LayoutParams(-1, 0, 1));
+        downloadPage = new ScrollView(this);
+        downloadPage.setId(R.id.download_page);
+        downloadPage.setFillViewport(true);
+        libraryPage = new ScrollView(this);
+        libraryPage.setId(R.id.library_page);
+        libraryPage.setFillViewport(true);
+        pages.addView(downloadPage, new FrameLayout.LayoutParams(-1, -1));
+        pages.addView(libraryPage, new FrameLayout.LayoutParams(-1, -1));
+        LinearLayout tabs = row();
+        tabs.setPadding(dp(16), dp(6), dp(16), dp(6));
+        tabs.setBackgroundColor(Color.WHITE);
+        downloadTab = button("下载", true, v -> showPage(0));
+        downloadTab.setId(R.id.download_tab);
+        libraryTab = button("我的下载", false, v -> showPage(1));
+        libraryTab.setId(R.id.library_tab);
+        tabs.addView(downloadTab, weighted());
+        tabs.addView(libraryTab, weighted());
+        shell.addView(tabs);
+        setContentView(shell);
         LinearLayout root = column();
         root.setPadding(dp(22), dp(24), dp(22), dp(24));
-        scroll.addView(root);
-        setContentView(scroll);
+        downloadPage.addView(root);
         TextView brand = text("FINE / 轻播", 13, green);
         brand.setTypeface(null, Typeface.BOLD);
         root.addView(brand);
-        TextView heading = text("一个链接，即刻开播", 28, ink);
+        TextView heading = text("下载视频", 28, ink);
         heading.setTypeface(null, Typeface.BOLD);
         add(root, heading, 10);
-        add(root, text("M3U8 在线播放 · 下载随身看", 14, Color.GRAY), 8);
+        add(root, text("粘贴视频链接，下载或直接播放", 14, Color.GRAY), 8);
 
         LinearLayout input = card();
         add(root, input, 24);
         input.addView(text("视频链接", 14, ink));
         url = new EditText(this);
+        url.setId(R.id.video_url);
         url.setHint("https://example.com/video.m3u8");
         url.setTextSize(14);
         url.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
         url.setSingleLine(true);
         input.addView(url, new LinearLayout.LayoutParams(-1, dp(52)));
         title = new EditText(this);
+        title.setId(R.id.video_title);
         title.setHint("视频名称（可选）");
         title.setTextSize(14);
         title.setSingleLine(true);
         input.addView(title, new LinearLayout.LayoutParams(-1, dp(48)));
         LinearLayout actions = row();
         actions.addView(button("粘贴", false, v -> paste()), weighted());
-        actions.addView(button("播放", true, v -> playInput()), weighted());
+        Button play = button("播放", true, v -> playInput());
+        play.setId(R.id.play_online);
+        actions.addView(play, weighted());
         downloadButton = button("下载", false, v -> download());
         actions.addView(downloadButton, weighted());
         add(input, actions, 12);
@@ -111,21 +128,18 @@ public final class MainActivity extends Activity {
         });
         add(input, concurrency, 6);
 
-        playerView = new PlayerView(this);
-        playerView.setBackgroundColor(Color.rgb(18, 29, 29));
-        playerView.setShowBuffering(PlayerView.SHOW_BUFFERING_WHEN_PLAYING);
-        playerView.setContentDescription("视频播放器");
-        LinearLayout.LayoutParams video = new LinearLayout.LayoutParams(-1, dp(215));
-        video.topMargin = dp(20);
-        root.addView(playerView, video);
-        status = text("等待播放 · 粘贴链接后点击播放", 13, green);
-        add(root, status, 10);
+        status = text("支持 M3U8 点播与直播在线播放", 13, green);
+        add(root, status, 18);
+        LinearLayout library = column();
+        library.setPadding(dp(22), dp(24), dp(22), dp(24));
+        libraryPage.addView(library);
+        library.addView(text("FINE / 视频库", 13, green));
         TextView downloads = text("我的下载", 22, ink);
         downloads.setTypeface(null, Typeface.BOLD);
-        add(root, downloads, 28);
-        add(root, text("下载完成后，无网络也能播放", 13, Color.GRAY), 6);
+        add(library, downloads, 12);
+        add(library, text("管理下载进度，或打开已保存的视频", 13, Color.GRAY), 8);
         list = column();
-        add(root, list, 12);
+        add(library, list, 20);
         empty = text("还没有下载\n添加一个视频，把喜欢的内容留在本地。", 14, Color.GRAY);
         empty.setPadding(dp(16), dp(24), dp(16), dp(24));
         list.addView(empty);
@@ -146,53 +160,30 @@ public final class MainActivity extends Activity {
         return new MediaItem.Builder().setUri(link).setMimeType(MimeTypes.APPLICATION_M3U8).build();
     }
     private void playInput() {
-        try { play(item(inputLink()), false); }
-        catch (IllegalArgumentException e) { url.setError(e.getMessage()); }
+        try {
+            startActivity(PlayerActivity.online(this, inputLink(), title.getText().toString().trim()));
+        } catch (IllegalArgumentException e) { url.setError(e.getMessage()); }
     }
-    private void play(MediaItem media, boolean offline) {
-        releasePlayer();
-        currentItem = media;
-        currentOffline = offline;
-        position = 0;
-        resumePlayback = true;
-        createPlayer();
+    private void showPage(int selected) {
+        page = selected == 1 ? 1 : 0;
+        downloadPage.setVisibility(page == 0 ? View.VISIBLE : View.GONE);
+        libraryPage.setVisibility(page == 1 ? View.VISIBLE : View.GONE);
+        downloadTab.setSelected(page == 0);
+        libraryTab.setSelected(page == 1);
+        downloadTab.setTextColor(page == 0 ? Color.WHITE : green);
+        libraryTab.setTextColor(page == 1 ? Color.WHITE : green);
+        downloadTab.setBackgroundTintList(android.content.res.ColorStateList.valueOf(page == 0 ? green : Color.rgb(230,242,237)));
+        libraryTab.setBackgroundTintList(android.content.res.ColorStateList.valueOf(page == 1 ? green : Color.rgb(230,242,237)));
+        handler.removeCallbacks(refresh);
+        if (visible && page == 1) handler.post(refresh);
+        android.view.inputmethod.InputMethodManager keyboard = (android.view.inputmethod.InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+        keyboard.hideSoftInputFromWindow(url.getWindowToken(), 0);
     }
-    private void createPlayer() {
-        if (currentItem == null || player != null) return;
-        player = new ExoPlayer.Builder(this)
-                .setMediaSourceFactory(new DefaultMediaSourceFactory(app.source(currentOffline))).build();
-        playerView.setPlayer(player);
-        player.addListener(new Player.Listener() {
-            @Override public void onPlaybackStateChanged(int state) {
-                if (state == Player.STATE_BUFFERING) status.setText("正在加载视频…");
-                if (state == Player.STATE_READY) status.setText(currentOffline ? "本地播放 · 无需网络" : "在线播放");
-                if (state == Player.STATE_ENDED) status.setText("播放完毕");
-            }
-            @Override public void onIsPlayingChanged(boolean playing) {
-                if (playing) getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-                else getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-            }
-            @Override public void onPlayerError(PlaybackException error) {
-                status.setText(getString(R.string.playback_error, error.getErrorCodeName()));
-            }
-        });
-        if (currentOffline) {
-            java.util.Set<String> gaps = app.problems().skipped(Links.id(currentItem.localConfiguration.uri.toString()));
-            player.setMediaSource(new androidx.media3.exoplayer.hls.HlsMediaSource.Factory(app.source(true))
-                    .setPlaylistParserFactory(GapPlaylistParser.factory(gaps)).createMediaSource(currentItem), position);
-        } else player.setMediaItem(currentItem, position);
-        player.prepare();
-        player.setPlayWhenReady(resumePlayback);
+    @Override protected void onNewIntent(android.content.Intent intent) {
+        super.onNewIntent(intent); setIntent(intent); showPage(intent.getIntExtra("page", page));
     }
-    private void releasePlayer() {
-        if (player != null) {
-            position = player.getCurrentPosition();
-            resumePlayback = player.getPlayWhenReady();
-            playerView.setPlayer(null);
-            player.release();
-            player = null;
-        }
-        getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+    @Override public void onBackPressed() {
+        if (page == 1) showPage(0); else super.onBackPressed();
     }
 
     private void download() {
@@ -202,7 +193,7 @@ public final class MainActivity extends Activity {
         if (preparing != null) return;
         try {
             Download existing = app.downloads().getDownloadIndex().getDownload(Links.id(link));
-            if (existing != null) { message("此链接已在下载列表中，可继续、重试或离线播放"); return; }
+            if (existing != null) { message("此链接已在下载列表中，可继续、重试或离线播放"); showPage(1); return; }
         } catch (IOException e) { message("读取下载记录失败"); return; }
         if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED)
             requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 1);
@@ -217,6 +208,7 @@ public final class MainActivity extends Activity {
                     DownloadRequest request = helper.getDownloadRequest(Links.id(link), name.getBytes(StandardCharsets.UTF_8));
                     DownloadService.sendAddDownload(MainActivity.this, VideoDownloadService.class, request, false);
                     message("已加入下载队列");
+                    showPage(1);
                 } finally { finishPreparation(helper); }
             }
             @Override public void onPrepareError(DownloadHelper helper, IOException e) {
@@ -245,9 +237,9 @@ public final class MainActivity extends Activity {
                     Download saved = cursor.getDownload();
                     entries.add(active.containsKey(saved.request.id) ? active.get(saved.request.id) : saved);
                 }
-                handler.post(() -> { querying = false; if (!isDestroyed()) showDownloads(entries); });
+                handler.post(() -> { querying = false; if (!isDestroyed() && visible && page == 1) showDownloads(entries); });
             } catch (IOException e) {
-                handler.post(() -> { querying = false; if (!isDestroyed()) status.setText("无法读取下载记录"); });
+                handler.post(() -> { querying = false; if (!isDestroyed()) message("无法读取下载记录"); });
             }
         });
     }
@@ -289,7 +281,7 @@ public final class MainActivity extends Activity {
             updateProgress(d);
             LinearLayout actions = row();
             if (d.state == Download.STATE_COMPLETED) {
-                actions.addView(button("离线播放", true, v -> play(d.request.toMediaItem(), true)), weighted());
+                actions.addView(button("离线播放", true, v -> startActivity(PlayerActivity.offline(this, d.request))), weighted());
             } else if (d.state == Download.STATE_FAILED) {
                 actions.addView(button("处理失败", false, v -> handleFailures(d)), weighted());
             } else if (d.state != Download.STATE_REMOVING) {
@@ -306,10 +298,6 @@ public final class MainActivity extends Activity {
             actions.addView(button("删除", false, v -> new AlertDialog.Builder(this)
                     .setTitle("删除下载？").setMessage("将移除此视频和本地下载文件。")
                     .setNegativeButton("取消", null).setPositiveButton("删除", (dialog, which) -> {
-                        if (currentItem != null && currentItem.localConfiguration != null
-                                && currentItem.localConfiguration.uri.equals(d.request.uri)) {
-                            releasePlayer(); currentItem = null; status.setText("视频已移除");
-                        }
                         DownloadService.sendRemoveDownload(this, VideoDownloadService.class, d.request.id, false);
                     }).show()), weighted());
             add(card, actions, 8);
@@ -367,13 +355,14 @@ public final class MainActivity extends Activity {
     private void add(LinearLayout parent, View child, int margin) {
         LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-1, -2); p.topMargin = dp(margin); parent.addView(child, p);
     }
-    @Override protected void onStart() { super.onStart(); handler.post(refresh); createPlayer(); }
-    @Override protected void onStop() { handler.removeCallbacks(refresh); releasePlayer(); super.onStop(); }
+    @Override protected void onStart() { super.onStart(); visible = true; showPage(page); }
+    @Override protected void onStop() { visible = false; handler.removeCallbacks(refresh); super.onStop(); }
     @Override protected void onSaveInstanceState(Bundle state) {
+        state.putInt("page", page);
         state.putString("url", url.getText().toString()); state.putString("title", title.getText().toString()); super.onSaveInstanceState(state);
     }
     @Override protected void onDestroy() {
         if (preparing != null) preparing.release();
-        releasePlayer(); super.onDestroy();
+        super.onDestroy();
     }
 }
