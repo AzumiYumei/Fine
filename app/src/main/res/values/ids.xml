@@ -12,4 +12,6 @@
     <item name="player_controls" type="id" />
     <item name="playback_progress" type="id" />
     <item name="playback_settings" type="id" />
+    <item name="settings_page" type="id" />
+    <item name="settings_tab" type="id" />
 </resources>

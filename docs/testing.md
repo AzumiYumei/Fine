@@ -2,6 +2,31 @@
 
 日期：2026-10-31（北京时间）
 
+## 1.5 自选目录与 MP4 转换
+
+- 新增独立设置页：系统文件夹选择器、恢复内部存储、视频转换入口和下载并发。已在连接手机检查设置页布局，保持原有下载数据。
+- 新增本地文件位置持久化；已下载视频转换后复用原列表条目，标识改为 MP4，点击打开本地 MP4。源文件默认保留，可在转换前勾选成功后删除，也可转换后长按删除源文件。
+- 17 项桌面自动测试通过；新增检查本地位置、格式和播放入口跨记录重建保留。Lint 0 错误、3 条国际化提示。
+- 9 项 Android 真机测试通过，使用自行生成的 4 秒测试图案与 440Hz 音频，不操作用户视频。覆盖两段 H.264/AAC 转 MP4 的音视频轨道、时长及可解码画面；AES-128 解密导出；缺段时间轴；损坏输入；前台服务保留/删除源文件和失败不删除；含音轨的主播放列表导出。
+- SAF 测试使用仅存在于 debug 构建的隔离 DocumentsProvider，实际通过 content URI 创建、写入、重读 HLS 和 MP4，删除原测试源后仍能转换、验证。系统选择器的手动授权及不同 SD 卡/云盘提供方仍需手动验收。preview/release 不包含该测试 Provider、测试视频或测试依赖。
+- MP4 使用设备的 MediaExtractor/MediaMuxer，无新增运行时依赖，不重新编码。实际兼容性受系统提取/封装能力约束，DRM、编码参数中途变化及不支持的编码会失败并保留源视频。
+- 保存使用前台服务、逐文件 SHA-256 重读校验和持久化未完成标记。下载先暂存在内部缓存，完成后再存至自选目录；转换也需要内部临时空间。更改目录不会移动旧视频。
+
+真机回归命令（先构建并覆盖安装 debug 与 androidTest APK，不清空应用数据）：
+
+```powershell
+./gradlew.bat :app:assembleDebug :app:assembleDebugAndroidTest
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+adb install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
+adb shell am instrument -w com.fine.player.test/androidx.test.runner.AndroidJUnitRunner
+```
+
+测试素材只含程序生成的动态图案与正弦音。生成命令：
+
+```text
+ffmpeg -f lavfi -i testsrc2=size=160x90:rate=25 -f lavfi -i sine=frequency=440:sample_rate=48000 -t 4 -c:v libx264 -preset ultrafast -g 50 -bf 0 -c:a aac -b:a 64k -f hls -hls_time 2 -hls_list_size 0 test.m3u8
+```
+
 ## 1.4 极简界面与下载归档
 
 - 16 项测试通过，0 失败；压缩 APK 构建通过；Lint 0 错误、2 条国际化提示。

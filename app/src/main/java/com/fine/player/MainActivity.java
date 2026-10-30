@@ -32,8 +32,10 @@ public final class MainActivity extends Activity {
     private LinearLayout list, pendingList;
     private Button downloadButton;
     private DownloadHelper preparing;
-    private ScrollView downloadPage, libraryPage;
-    private Button downloadTab, libraryTab;
+    private ScrollView downloadPage, libraryPage, settingsPage;
+    private TextView locationLabel;
+    private List<Download> latestDownloads = Collections.emptyList();
+    private Button downloadTab, libraryTab, settingsTab;
     private int page;
     private boolean visible;
     private String lastRows = "#";
@@ -71,6 +73,9 @@ public final class MainActivity extends Activity {
         libraryPage.setFillViewport(true);
         pages.addView(downloadPage, new FrameLayout.LayoutParams(-1, -1));
         pages.addView(libraryPage, new FrameLayout.LayoutParams(-1, -1));
+        settingsPage = new ScrollView(this);
+        settingsPage.setId(R.id.settings_page);
+        pages.addView(settingsPage, new FrameLayout.LayoutParams(-1, -1));
         LinearLayout tabs = row();
         tabs.setPadding(dp(16), dp(12), dp(16), dp(12));
         tabs.setBackgroundColor(Color.WHITE);
@@ -80,6 +85,9 @@ public final class MainActivity extends Activity {
         libraryTab.setId(R.id.library_tab);
         tabs.addView(downloadTab, weighted());
         tabs.addView(libraryTab, weighted());
+        settingsTab = button("设置", false, v -> showPage(2));
+        settingsTab.setId(R.id.settings_tab);
+        tabs.addView(settingsTab, weighted());
         shell.addView(tabs);
         setContentView(shell);
         LinearLayout root = column();
@@ -120,15 +128,6 @@ public final class MainActivity extends Activity {
         actions.addView(downloadButton, weighted());
         add(input, actions, 12);
         add(input, text("不限速 · 自动重试 3 次 · 使用当前网络", 12, QuietStyle.MUTED), 10);
-        Button concurrency = button("下载并发：" + app.parallelism() + " 线程", false, null);
-        concurrency.setOnClickListener(v -> {
-            int[] values = {2, 4, 6, 8};
-            new AlertDialog.Builder(this).setTitle("分片并发（下次开始或继续时生效）")
-                    .setItems(new String[]{"2 线程 · 较少占用", "4 线程", "6 线程 · 默认", "8 线程"}, (dialog, which) -> {
-                        app.parallelism(values[which]); concurrency.setText("下载并发：" + values[which] + " 线程");
-                    }).show();
-        });
-        add(input, concurrency, 6);
 
         pendingList = column();
         add(root, pendingList, 20);
@@ -143,6 +142,36 @@ public final class MainActivity extends Activity {
         empty.setBackground(QuietStyle.panel(this, QuietStyle.SOFT, 1));
         empty.setTextColor(ink);
         list.addView(empty);
+        LinearLayout settings = column();
+        settings.setPadding(dp(24), dp(20), dp(24), dp(20));
+        settingsPage.addView(settings);
+        settings.addView(text("设置", 22, ink));
+        LinearLayout storage = card();
+        add(settings, storage, 24);
+        storage.addView(text("下载位置", 16, ink));
+        locationLabel = text(app.library().destinationLabel(), 13, QuietStyle.MUTED);
+        add(storage, locationLabel, 10);
+        add(storage, button("选择文件夹", true, v -> chooseDirectory()), 12);
+        add(storage, button("使用应用内部存储", false, v -> {
+            try { app.library().destination(""); locationLabel.setText(app.library().destinationLabel()); }
+            catch (IOException e) { message(e.getMessage()); }
+        }), 8);
+        add(storage, text("新下载完成后保存到此目录；旧视频保持原位。下载和转换期间需要内部临时空间。", 12, QuietStyle.MUTED), 12);
+        LinearLayout conversion = card();
+        add(settings, conversion, 16);
+        conversion.addView(text("M3U8 转 MP4", 16, ink));
+        add(conversion, text("将已下载视频转为 MP4，保持画质。可选择转换成功后删除源文件。", 13, QuietStyle.MUTED), 10);
+        add(conversion, button("选择视频转换", true, v -> chooseConversion()), 12);
+        Button concurrency = button("下载并发：" + app.parallelism() + " 线程", false, null);
+        concurrency.setOnClickListener(v -> {
+            int[] values = {2, 4, 6, 8};
+            new AlertDialog.Builder(this).setTitle("分片并发（下次开始或继续时生效）")
+                    .setItems(new String[]{"2 线程 · 较少占用", "4 线程", "6 线程 · 默认", "8 线程"}, (dialog, which) -> {
+                        app.parallelism(values[which]); concurrency.setText("下载并发：" + values[which] + " 线程");
+                    }).show();
+        });
+        add(settings, concurrency, 16);
+
     }
 
     private void paste() {
@@ -165,13 +194,17 @@ public final class MainActivity extends Activity {
         } catch (IllegalArgumentException e) { url.setError(e.getMessage()); }
     }
     private void showPage(int selected) {
-        page = selected == 1 ? 1 : 0;
+        page = selected >= 0 && selected <= 2 ? selected : 0;
         downloadPage.setVisibility(page == 0 ? View.VISIBLE : View.GONE);
         libraryPage.setVisibility(page == 1 ? View.VISIBLE : View.GONE);
+        settingsPage.setVisibility(page == 2 ? View.VISIBLE : View.GONE);
+        locationLabel.setText(app.library().destinationLabel());
         downloadTab.setSelected(page == 0);
         libraryTab.setSelected(page == 1);
+        settingsTab.setSelected(page == 2);
         QuietStyle.button(downloadTab, page == 0 ? QuietStyle.SOFT : Color.WHITE, page == 0 ? QuietStyle.ACCENT : QuietStyle.MUTED);
         QuietStyle.button(libraryTab, page == 1 ? QuietStyle.SOFT : Color.WHITE, page == 1 ? QuietStyle.ACCENT : QuietStyle.MUTED);
+        QuietStyle.button(settingsTab, page == 2 ? QuietStyle.SOFT : Color.WHITE, page == 2 ? QuietStyle.ACCENT : QuietStyle.MUTED);
         handler.removeCallbacks(refresh);
         if (visible) handler.post(refresh);
         android.view.inputmethod.InputMethodManager keyboard = (android.view.inputmethod.InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
@@ -181,7 +214,7 @@ public final class MainActivity extends Activity {
         super.onNewIntent(intent); setIntent(intent); showPage(intent.getIntExtra("page", page));
     }
     @Override public void onBackPressed() {
-        if (page == 1) showPage(0); else super.onBackPressed();
+        if (page != 0) showPage(0); else super.onBackPressed();
     }
 
     private void download() {
@@ -204,9 +237,10 @@ public final class MainActivity extends Activity {
             @Override public void onPrepared(DownloadHelper helper) {
                 try {
                     DownloadRequest request = helper.getDownloadRequest(Links.id(link), name.getBytes(StandardCharsets.UTF_8));
+                    app.library().put(request.id, "destination", app.library().destination());
                     DownloadService.sendAddDownload(MainActivity.this, VideoDownloadService.class, request, false);
                     message("已加入下载队列");
-                } finally { finishPreparation(helper); }
+                } catch (IOException e) { message(e.getMessage()); } finally { finishPreparation(helper); }
             }
             @Override public void onPrepareError(DownloadHelper helper, IOException e) {
                 message(e instanceof DownloadHelper.LiveContentUnsupportedException
@@ -242,6 +276,7 @@ public final class MainActivity extends Activity {
     }
     private void updateProgress(Download d) {
         TextView label = rowStatus.get(d.request.id);
+        if (d.state == Download.STATE_COMPLETED) { if (label != null) label.setText(savedStatus(d.request.id)); return; }
         if (label != null) label.setText(stateText(d) + " · " + String.format(Locale.CHINA, "%.1f MB", d.getBytesDownloaded() / 1048576.0)
                 + (app.problems().skipped(d.request.id).isEmpty() ? "" : " · 已丢弃 " + app.problems().skipped(d.request.id).size() + " 片（视频缺段）"));
         ProgressBar progress = rowProgress.get(d.request.id);
@@ -251,8 +286,10 @@ public final class MainActivity extends Activity {
         }
     }
     private void showDownloads(List<Download> entries) {
+        latestDownloads = entries;
         StringBuilder signature = new StringBuilder();
-        for (Download d : entries) signature.append(d.request.id).append(':').append(d.state).append(';');
+        for (Download d : entries) signature.append(d.request.id).append(':').append(d.state)
+                .append(app.library().get(d.request.id, "mp4")).append(app.library().get(d.request.id, "hls")).append(';');
         if (signature.toString().equals(lastRows)) {
             for (Download d : entries) updateProgress(d);
             return;
@@ -327,21 +364,93 @@ public final class MainActivity extends Activity {
         nameView.setMaxLines(2);
         nameView.setEllipsize(android.text.TextUtils.TruncateAt.END);
         details.addView(nameView);
-        add(details, text(app.problems().skipped(d.request.id).isEmpty() ? "离线视频" : "离线视频 · 缺段", 12, QuietStyle.MUTED), 5);
-        View.OnClickListener play = v -> startActivity(PlayerActivity.offline(this, d.request));
+        TextView detail = text(savedStatus(d.request.id), 12, QuietStyle.MUTED);
+        rowStatus.put(d.request.id, detail);
+        add(details, detail, 5);
+        View.OnClickListener play = v -> startActivity(PlayerActivity.saved(this, d.request, app.library()));
         card.setOnClickListener(play); cover.setOnClickListener(play);
         card.setContentDescription("播放 " + name);
-        View.OnLongClickListener remove = v -> {
-            new AlertDialog.Builder(this).setTitle("删除此视频？").setNegativeButton("取消", null)
-                    .setPositiveButton("删除", (dialog, which) -> {
-                        app.thumbnails().remove(d.request.id);
-                        DownloadService.sendRemoveDownload(this, VideoDownloadService.class, d.request.id, false);
-                    }).show();
-            return true;
-        };
-        card.setOnLongClickListener(remove);
-        cover.setOnLongClickListener(remove);
+        View.OnLongClickListener menu = v -> { savedMenu(d); return true; };
+        card.setOnLongClickListener(menu);
+        cover.setOnLongClickListener(menu);
     }
+    private String savedStatus(String id) {
+        String job = FileTaskService.status(id);
+        if (!job.isEmpty()) return job;
+        String format = app.library().get(id, "mp4").isEmpty() ? "M3U8" : "MP4";
+        if (!app.library().get(id, "error").isEmpty()) return format + " · 处理失败，长按查看";
+        if (!app.library().get(id, "incomplete").isEmpty()) return format + " · 操作中断，长按重试";
+        return format + (app.problems().skipped(id).isEmpty() ? " · 离线视频" : " · 缺段");
+    }
+    private void savedMenu(Download d) {
+        if (!FileTaskService.status(d.request.id).isEmpty()) { message("正在处理此视频，请稍候"); return; }
+        ArrayList<String> labels = new ArrayList<>();
+        ArrayList<Runnable> actions = new ArrayList<>();
+        LibraryFiles files = app.library();
+        String id = d.request.id;
+        if (!files.get(id, "error").isEmpty()) {
+            labels.add("查看处理失败原因"); actions.add(() -> new AlertDialog.Builder(this).setTitle("文件处理未完成")
+                    .setMessage(files.get(id, "error")).setPositiveButton("知道了", null).show());
+        }
+        if (files.get(id, "mp4").isEmpty()) {
+            labels.add("转为 MP4"); actions.add(() -> confirmConversion(d));
+        } else if (!files.flag(id, "sourceDeleted")) {
+            labels.add("删除保留的 M3U8 源文件"); actions.add(() -> new AlertDialog.Builder(this).setTitle("删除源文件？")
+                    .setMessage("保留 MP4，删除此视频的 M3U8 和分片。")
+                    .setNegativeButton("取消", null).setPositiveButton("删除源文件", (dialog, which) -> FileTaskService.start(this, d.request, "source", false)).show());
+        }
+        if (!files.flag(id, "sourceDeleted") && !files.get(id, "destination").isEmpty() && files.get(id, "hls").isEmpty()) {
+            labels.add("重新保存到下载目录"); actions.add(() -> FileTaskService.start(this, d.request, "save", false));
+        }
+        labels.add("删除视频"); actions.add(() -> new AlertDialog.Builder(this).setTitle("删除此视频？")
+                .setMessage("将删除此视频的 MP4、M3U8 和分片文件。")
+                .setNegativeButton("取消", null).setPositiveButton("删除", (dialog, which) -> FileTaskService.start(this, d.request, "delete", false)).show());
+        new AlertDialog.Builder(this).setItems(labels.toArray(new String[0]), (dialog, which) -> actions.get(which).run()).show();
+    }
+    private void chooseConversion() {
+        ArrayList<Download> choices = new ArrayList<>();
+        ArrayList<String> labels = new ArrayList<>();
+        for (Download d : latestDownloads) if (d.state == Download.STATE_COMPLETED && app.library().get(d.request.id, "mp4").isEmpty()) {
+            choices.add(d); labels.add(new String(d.request.data, StandardCharsets.UTF_8));
+        }
+        if (choices.isEmpty()) { message("暂无可转换的 M3U8，请先下载视频"); return; }
+        new AlertDialog.Builder(this).setTitle("选择视频").setItems(labels.toArray(new String[0]), (dialog, which) -> confirmConversion(choices.get(which))).show();
+    }
+    private void confirmConversion(Download d) {
+        if (!FileTaskService.status(d.request.id).isEmpty()) { message("此视频正在处理中"); return; }
+        LinearLayout content = column(); content.setPadding(dp(24), dp(12), dp(24), 0);
+        content.addView(text("转换音视频，不重新编码。缺失片段无法恢复，外挂字幕不写入 MP4。转换期间需要额外空间，输出保存到设置中的目录。", 14, ink));
+        CheckBox remove = new CheckBox(this); remove.setText("转换成功后删除 M3U8 源文件"); remove.setTextColor(ink);
+        add(content, remove, 12);
+        new AlertDialog.Builder(this).setTitle("转为 MP4").setView(content).setNegativeButton("取消", null)
+                .setPositiveButton("开始转换", (dialog, which) -> { FileTaskService.start(this, d.request, "convert", remove.isChecked()); showPage(1); }).show();
+    }
+    private void chooseDirectory() {
+        android.content.Intent picker = new android.content.Intent(android.content.Intent.ACTION_OPEN_DOCUMENT_TREE)
+                .addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION | android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                        | android.content.Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION | android.content.Intent.FLAG_GRANT_PREFIX_URI_PERMISSION);
+        try { startActivityForResult(picker, 42); }
+        catch (android.content.ActivityNotFoundException e) { message("系统文件夹选择器不可用"); }
+    }
+    @Override protected void onActivityResult(int requestCode, int resultCode, android.content.Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode != 42 || resultCode != RESULT_OK || data == null || data.getData() == null) return;
+        android.net.Uri tree = data.getData();
+        try {
+            getContentResolver().takePersistableUriPermission(tree,
+                    android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION | android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+        } catch (SecurityException e) { message("未获得目录访问权限，请重新选择"); return; }
+        app.queries.execute(() -> {
+            try {
+                android.net.Uri probe = LibraryFiles.create(this, LibraryFiles.treeRoot(tree.toString()), "application/octet-stream", ".fine-check-" + UUID.randomUUID());
+                try { HlsExporter.writeChecked(this, probe, out -> out.write(1)); }
+                finally { LibraryFiles.delete(this, probe); }
+                app.library().destination(tree.toString());
+                handler.post(() -> { if (!isDestroyed()) { locationLabel.setText(app.library().destinationLabel()); message("下载位置已更新"); } });
+            } catch (Exception e) { handler.post(() -> message("目录无法读写，请选择其他文件夹")); }
+        });
+    }
+
     private void handleFailures(Download d) {
         List<DownloadProblems.Failure> failures = app.problems().failures(d.request.id);
         StringBuilder details = new StringBuilder();

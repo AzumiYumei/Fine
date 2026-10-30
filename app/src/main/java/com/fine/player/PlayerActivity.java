@@ -45,6 +45,7 @@ public final class PlayerActivity extends Activity {
     private ExoPlayer player;
     private MediaItem media;
     private DownloadRequest download;
+    private boolean localFile;
     private boolean fullscreen, playWhenReady = true;
     private long position;
 
@@ -55,11 +56,21 @@ public final class PlayerActivity extends Activity {
         return new Intent(context, PlayerActivity.class).putExtra("download", request)
                 .putExtra("title", new String(request.data, StandardCharsets.UTF_8));
     }
+    static Intent saved(Context context, DownloadRequest request, LibraryFiles files) {
+        String mp4 = files.get(request.id, "mp4"), hls = files.get(request.id, "hls");
+        if (mp4.isEmpty() && hls.isEmpty()) return offline(context, request);
+        return new Intent(context, PlayerActivity.class).putExtra("local", mp4.isEmpty() ? hls : mp4)
+                .putExtra("mp4", !mp4.isEmpty());
+    }
     @Override protected void onCreate(Bundle state) {
         super.onCreate(state);
         download = getIntent().getParcelableExtra("download");
         try {
-            media = download != null ? download.toMediaItem() : new MediaItem.Builder()
+            String local = getIntent().getStringExtra("local");
+            localFile = local != null;
+            media = localFile ? new MediaItem.Builder().setUri(local)
+                    .setMimeType(getIntent().getBooleanExtra("mp4", false) ? MimeTypes.VIDEO_MP4 : MimeTypes.APPLICATION_M3U8).build()
+                    : download != null ? download.toMediaItem() : new MediaItem.Builder()
                     .setUri(Links.normalize(getIntent().getStringExtra("url") == null ? "" : getIntent().getStringExtra("url")))
                     .setMimeType(MimeTypes.APPLICATION_M3U8).build();
         } catch (IllegalArgumentException e) { finish(); return; }
@@ -184,7 +195,7 @@ public final class PlayerActivity extends Activity {
     private void startPlayer() {
         if (media == null || player != null) return;
         FineApp app = (FineApp) getApplication();
-        player = new ExoPlayer.Builder(this).setMediaSourceFactory(new DefaultMediaSourceFactory(app.source(download != null))).build();
+        player = new ExoPlayer.Builder(this).setMediaSourceFactory(new DefaultMediaSourceFactory(localFile ? app.localSource() : app.source(download != null))).build();
         video.setPlayer(player);
         player.addListener(new Player.Listener() {
             @Override public void onIsPlayingChanged(boolean playing) {

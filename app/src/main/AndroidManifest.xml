@@ -18,6 +18,7 @@
         </activity>
         <activity android:name=".PlayerActivity" android:exported="false"
             android:configChanges="orientation|screenSize|keyboardHidden" />
+        <service android:name=".FileTaskService" android:exported="false" android:foregroundServiceType="dataSync" />
         <service android:name=".VideoDownloadService" android:exported="false"
             android:foregroundServiceType="dataSync" />
     </application>

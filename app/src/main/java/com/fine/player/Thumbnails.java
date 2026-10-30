@@ -52,29 +52,33 @@ final class Thumbnails {
             });
         });
     }
-    private HlsPlaylist playlist(Uri uri,DownloadRequest request)throws IOException{
-        return ParsingLoadable.load(app.source(true).createDataSource(),new GapPlaylistParser(new HlsPlaylistParser(),app.problems().skipped(request.id)),uri,C.DATA_TYPE_MANIFEST);
-    }
     private Bitmap extract(DownloadRequest request)throws Exception{
-        HlsPlaylist root=playlist(request.uri,request);
-        if(!request.streamKeys.isEmpty())root=root.copy(request.streamKeys);
-        if(root instanceof HlsMultivariantPlaylist){
-            HlsMultivariantPlaylist master=(HlsMultivariantPlaylist)root;
-            if(master.variants.isEmpty())return null;
-            root=playlist(master.variants.get(0).url,request);
+        String mp4=app.library().get(request.id,"mp4");
+        if(!mp4.isEmpty()){
+            MediaMetadataRetriever retriever=new MediaMetadataRetriever();
+            try { retriever.setDataSource(app,Uri.parse(mp4)); return frame(retriever); }
+            finally { retriever.release(); }
         }
-        HlsMediaPlaylist media=(HlsMediaPlaylist)root;int attempts=0;
+        OfflineHls hls=app.offlineHls(request);
+        int selected=0;
+        if(hls.root instanceof HlsMultivariantPlaylist){
+            HlsMultivariantPlaylist master=(HlsMultivariantPlaylist)hls.root;
+            if(master.variants.isEmpty())return null;
+            selected=hls.urls.indexOf(master.variants.get(0).url);
+        }
+        HlsMediaPlaylist media=hls.playlists.get(selected);int attempts=0;
+
         for(HlsMediaPlaylist.Segment segment:media.segments){
             if(segment.hasGapTag)continue;if(++attempts>3)break;
             File temp=File.createTempFile("cover-",".media",app.getCacheDir());
             MediaMetadataRetriever retriever=new MediaMetadataRetriever();
             try{
                 try(OutputStream out=new FileOutputStream(temp)){
-                    if(segment.initializationSegment!=null)write(media,segment.initializationSegment,out);
-                    write(media,segment,out);
+                    if(segment.initializationSegment!=null)hls.writeSegment(media,segment.initializationSegment,out);
+                    hls.writeSegment(media,segment,out);
                 }
                 retriever.setDataSource(temp.getPath());
-                Bitmap frame=Build.VERSION.SDK_INT>=27?retriever.getScaledFrameAtTime(0,MediaMetadataRetriever.OPTION_CLOSEST,480,270):retriever.getFrameAtTime(0,MediaMetadataRetriever.OPTION_CLOSEST);
+                Bitmap frame=frame(retriever);
                 if(frame!=null){
                     if(frame.getWidth()>640){Bitmap scaled=Bitmap.createScaledBitmap(frame,480,Math.max(1,480*frame.getHeight()/frame.getWidth()),true);frame.recycle();return scaled;}
                     return frame;
@@ -83,23 +87,8 @@ final class Thumbnails {
         }
         return null;
     }
-    private void write(HlsMediaPlaylist media,HlsMediaPlaylist.Segment segment,OutputStream out)throws Exception{
-        DataSpec spec=new DataSpec(UriUtil.resolveToUri(media.baseUri,segment.url),segment.byteRangeOffset,segment.byteRangeLength);
-        try(InputStream raw=new DataSourceInputStream(app.source(true).createDataSource(),spec)){
-            InputStream input=raw;
-            if(segment.fullSegmentEncryptionKeyUri!=null){
-                byte[] key;
-                try(InputStream source=new DataSourceInputStream(app.source(true).createDataSource(),new DataSpec(UriUtil.resolveToUri(media.baseUri,segment.fullSegmentEncryptionKeyUri)))){
-                    ByteArrayOutputStream bytes=new ByteArrayOutputStream();int b;
-                    while((b=source.read())!=-1){if(bytes.size()>=16)throw new IOException("Invalid AES key");bytes.write(b);}key=bytes.toByteArray();
-                }
-                byte[] value=new BigInteger(segment.encryptionIV.replaceFirst("^0[xX]",""),16).toByteArray(),iv=new byte[16];
-                System.arraycopy(value,Math.max(0,value.length-16),iv,Math.max(0,16-value.length),Math.min(16,value.length));
-                Cipher cipher=Cipher.getInstance("AES/CBC/PKCS5Padding");cipher.init(Cipher.DECRYPT_MODE,new SecretKeySpec(key,"AES"),new IvParameterSpec(iv));input=new CipherInputStream(raw,cipher);
-            }
-            byte[] buffer=new byte[32768];int n;long count=0;
-            while((n=input.read(buffer))!=-1){count+=n;if(count>32*1024*1024)throw new IOException("Thumbnail segment too large");out.write(buffer,0,n);}
-        }
+    private Bitmap frame(MediaMetadataRetriever retriever){
+        return Build.VERSION.SDK_INT>=27?retriever.getScaledFrameAtTime(0,MediaMetadataRetriever.OPTION_CLOSEST,480,270):retriever.getFrameAtTime(0,MediaMetadataRetriever.OPTION_CLOSEST);
     }
     void remove(String id){worker.execute(()->new File(app.getFilesDir(),"covers/"+Links.id(id)+".jpg").delete());failed.remove(id);}
 }
