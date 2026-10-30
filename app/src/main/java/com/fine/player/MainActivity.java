@@ -307,17 +307,27 @@ public final class MainActivity extends Activity {
     }
     private void showSavedVideo(Download d) {
         LinearLayout card = card();
-        add(list, card, 12);
+        card.setOrientation(LinearLayout.HORIZONTAL);
+        card.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        card.setPadding(dp(12), dp(12), dp(12), dp(12));
+        add(list, card, 8);
         ImageView cover = new ImageView(this);
         cover.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
         cover.setBackgroundColor(QuietStyle.SOFT);
         cover.setImageResource(R.drawable.ic_video_placeholder);
         cover.setContentDescription("播放视频");
-        card.addView(cover, new LinearLayout.LayoutParams(-1, dp(170)));
+        card.addView(cover, new LinearLayout.LayoutParams(dp(104), dp(64)));
         app.thumbnails().load(d.request, cover);
         String name = new String(d.request.data, StandardCharsets.UTF_8);
-        add(card, text(name.isEmpty() ? "视频" : name, 16, ink), 10);
-        add(card, text(app.problems().skipped(d.request.id).isEmpty() ? "离线视频" : "离线视频 · 已丢弃缺失片段", 12, QuietStyle.MUTED), 4);
+        LinearLayout details = column();
+        LinearLayout.LayoutParams detailsSize = new LinearLayout.LayoutParams(0, -2, 1);
+        detailsSize.leftMargin = dp(12);
+        card.addView(details, detailsSize);
+        TextView nameView = text(name.isEmpty() ? "视频" : name, 15, ink);
+        nameView.setMaxLines(2);
+        nameView.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        details.addView(nameView);
+        add(details, text(app.problems().skipped(d.request.id).isEmpty() ? "离线视频" : "离线视频 · 缺段", 12, QuietStyle.MUTED), 5);
         View.OnClickListener play = v -> startActivity(PlayerActivity.offline(this, d.request));
         card.setOnClickListener(play); cover.setOnClickListener(play);
         card.setContentDescription("播放 " + name);
