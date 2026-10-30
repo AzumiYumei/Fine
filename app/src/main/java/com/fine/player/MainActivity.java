@@ -7,7 +7,6 @@ import android.content.ClipboardManager;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.graphics.Typeface;
-import android.graphics.drawable.GradientDrawable;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
@@ -26,23 +25,23 @@ import java.util.*;
 @androidx.media3.common.util.UnstableApi
 public final class MainActivity extends Activity {
     private final Handler handler = new Handler(Looper.getMainLooper());
-    private final int ink = Bauhaus.INK, green = Bauhaus.BLUE;
+    private final int ink = QuietStyle.INK, green = QuietStyle.ACCENT;
     private FineApp app;
     private EditText url, title;
-    private TextView status, empty;
-    private LinearLayout list;
+    private TextView empty;
+    private LinearLayout list, pendingList;
     private Button downloadButton;
     private DownloadHelper preparing;
     private ScrollView downloadPage, libraryPage;
     private Button downloadTab, libraryTab;
     private int page;
     private boolean visible;
-    private String lastRows = "";
+    private String lastRows = "#";
     private boolean querying;
     private final Map<String, TextView> rowStatus = new HashMap<>();
     private final Map<String, ProgressBar> rowProgress = new HashMap<>();
     private final Runnable refresh = new Runnable() {
-        @Override public void run() { if (visible && page == 1) { renderDownloads(); handler.postDelayed(this, 1000); } }
+        @Override public void run() { if (visible) { renderDownloads(); handler.postDelayed(this, 1000); } }
     };
 
     @Override public void onCreate(Bundle state) {
@@ -61,7 +60,7 @@ public final class MainActivity extends Activity {
 
     private void buildUi() {
         LinearLayout shell = column();
-        shell.setBackgroundColor(Bauhaus.PAPER);
+        shell.setBackgroundColor(QuietStyle.PAPER);
         FrameLayout pages = new FrameLayout(this);
         shell.addView(pages, new LinearLayout.LayoutParams(-1, 0, 1));
         downloadPage = new ScrollView(this);
@@ -74,10 +73,10 @@ public final class MainActivity extends Activity {
         pages.addView(libraryPage, new FrameLayout.LayoutParams(-1, -1));
         LinearLayout tabs = row();
         tabs.setPadding(dp(16), dp(12), dp(16), dp(12));
-        tabs.setBackground(Bauhaus.panel(this, Bauhaus.PAPER, 1));
-        downloadTab = button("01   下载", true, v -> showPage(0));
+        tabs.setBackgroundColor(Color.WHITE);
+        downloadTab = button("下载", true, v -> showPage(0));
         downloadTab.setId(R.id.download_tab);
-        libraryTab = button("02   我的下载", false, v -> showPage(1));
+        libraryTab = button("已下载", false, v -> showPage(1));
         libraryTab.setId(R.id.library_tab);
         tabs.addView(downloadTab, weighted());
         tabs.addView(libraryTab, weighted());
@@ -86,7 +85,7 @@ public final class MainActivity extends Activity {
         LinearLayout root = column();
         root.setPadding(dp(24), dp(20), dp(24), dp(20));
         downloadPage.addView(root);
-        root.addView(Bauhaus.header(this, "01", "下载视频", "输入 M3U8 链接，下载或直接播放。"));
+        root.addView(text("下载", 22, ink));
 
         LinearLayout input = card();
         add(root, input, 24);
@@ -97,7 +96,7 @@ public final class MainActivity extends Activity {
         url.setTextSize(14);
         url.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
         url.setSingleLine(true);
-        Bauhaus.input(url);
+        QuietStyle.input(url);
         LinearLayout.LayoutParams urlSize = new LinearLayout.LayoutParams(-1, dp(52));
         urlSize.topMargin = dp(10);
         input.addView(url, urlSize);
@@ -106,7 +105,7 @@ public final class MainActivity extends Activity {
         title.setHint("视频名称（可选）");
         title.setTextSize(14);
         title.setSingleLine(true);
-        Bauhaus.input(title);
+        QuietStyle.input(title);
         LinearLayout.LayoutParams titleSize = new LinearLayout.LayoutParams(-1, dp(48));
         titleSize.topMargin = dp(10);
         input.addView(title, titleSize);
@@ -114,13 +113,13 @@ public final class MainActivity extends Activity {
         actions.addView(button("粘贴", false, v -> paste()), weighted());
         Button play = button("播放", true, v -> playInput());
         play.setId(R.id.play_online);
-        Bauhaus.button(play, Bauhaus.BLUE, Color.WHITE);
+        QuietStyle.button(play, QuietStyle.ACCENT, Color.WHITE);
         actions.addView(play, weighted());
         downloadButton = button("下载", false, v -> download());
-        Bauhaus.button(downloadButton, Bauhaus.RED, Color.WHITE);
+        QuietStyle.button(downloadButton, QuietStyle.ACCENT, Color.WHITE);
         actions.addView(downloadButton, weighted());
         add(input, actions, 12);
-        add(input, text("不限速 · 自动重试 3 次 · 使用当前网络", 12, Bauhaus.MUTED), 10);
+        add(input, text("不限速 · 自动重试 3 次 · 使用当前网络", 12, QuietStyle.MUTED), 10);
         Button concurrency = button("下载并发：" + app.parallelism() + " 线程", false, null);
         concurrency.setOnClickListener(v -> {
             int[] values = {2, 4, 6, 8};
@@ -131,17 +130,17 @@ public final class MainActivity extends Activity {
         });
         add(input, concurrency, 6);
 
-        status = text("●  M3U8     /     在线与离线", 12, ink);
-        add(root, status, 18);
+        pendingList = column();
+        add(root, pendingList, 20);
         LinearLayout library = column();
         library.setPadding(dp(24), dp(20), dp(24), dp(20));
         libraryPage.addView(library);
-        library.addView(Bauhaus.header(this, "02", "我的下载", "管理下载进度，离线播放已保存的视频。"));
+        library.addView(text("已下载", 22, ink));
         list = column();
         add(library, list, 20);
-        empty = text("还没有下载\n添加一个视频，把喜欢的内容留在本地。", 14, Bauhaus.MUTED);
+        empty = text("暂无已下载视频", 14, QuietStyle.MUTED);
         empty.setPadding(dp(20), dp(32), dp(20), dp(32));
-        empty.setBackground(Bauhaus.panel(this, Bauhaus.YELLOW, 1));
+        empty.setBackground(QuietStyle.panel(this, QuietStyle.SOFT, 1));
         empty.setTextColor(ink);
         list.addView(empty);
     }
@@ -171,10 +170,10 @@ public final class MainActivity extends Activity {
         libraryPage.setVisibility(page == 1 ? View.VISIBLE : View.GONE);
         downloadTab.setSelected(page == 0);
         libraryTab.setSelected(page == 1);
-        Bauhaus.button(downloadTab, page == 0 ? ink : Bauhaus.PAPER, page == 0 ? Bauhaus.YELLOW : ink);
-        Bauhaus.button(libraryTab, page == 1 ? ink : Bauhaus.PAPER, page == 1 ? Bauhaus.YELLOW : ink);
+        QuietStyle.button(downloadTab, page == 0 ? QuietStyle.SOFT : Color.WHITE, page == 0 ? QuietStyle.ACCENT : QuietStyle.MUTED);
+        QuietStyle.button(libraryTab, page == 1 ? QuietStyle.SOFT : Color.WHITE, page == 1 ? QuietStyle.ACCENT : QuietStyle.MUTED);
         handler.removeCallbacks(refresh);
-        if (visible && page == 1) handler.post(refresh);
+        if (visible) handler.post(refresh);
         android.view.inputmethod.InputMethodManager keyboard = (android.view.inputmethod.InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
         keyboard.hideSoftInputFromWindow(url.getWindowToken(), 0);
     }
@@ -192,7 +191,7 @@ public final class MainActivity extends Activity {
         if (preparing != null) return;
         try {
             Download existing = app.downloads().getDownloadIndex().getDownload(Links.id(link));
-            if (existing != null) { message("此链接已在下载列表中，可继续、重试或离线播放"); showPage(1); return; }
+            if (existing != null) { message("此链接已在下载列表中"); showPage(existing.state == Download.STATE_COMPLETED ? 1 : 0); return; }
         } catch (IOException e) { message("读取下载记录失败"); return; }
         if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED)
             requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 1);
@@ -207,7 +206,6 @@ public final class MainActivity extends Activity {
                     DownloadRequest request = helper.getDownloadRequest(Links.id(link), name.getBytes(StandardCharsets.UTF_8));
                     DownloadService.sendAddDownload(MainActivity.this, VideoDownloadService.class, request, false);
                     message("已加入下载队列");
-                    showPage(1);
                 } finally { finishPreparation(helper); }
             }
             @Override public void onPrepareError(DownloadHelper helper, IOException e) {
@@ -236,7 +234,7 @@ public final class MainActivity extends Activity {
                     Download saved = cursor.getDownload();
                     entries.add(active.containsKey(saved.request.id) ? active.get(saved.request.id) : saved);
                 }
-                handler.post(() -> { querying = false; if (!isDestroyed() && visible && page == 1) showDownloads(entries); });
+                handler.post(() -> { querying = false; if (!isDestroyed() && visible) showDownloads(entries); });
             } catch (IOException e) {
                 handler.post(() -> { querying = false; if (!isDestroyed()) message("无法读取下载记录"); });
             }
@@ -255,24 +253,24 @@ public final class MainActivity extends Activity {
     private void showDownloads(List<Download> entries) {
         StringBuilder signature = new StringBuilder();
         for (Download d : entries) signature.append(d.request.id).append(':').append(d.state).append(';');
-        if (signature.toString().equals(lastRows) && !rowStatus.isEmpty()) {
+        if (signature.toString().equals(lastRows)) {
             for (Download d : entries) updateProgress(d);
             return;
         }
         lastRows = signature.toString();
         rowStatus.clear(); rowProgress.clear();
         list.removeAllViews();
+        pendingList.removeAllViews();
         if (entries.isEmpty()) { list.addView(empty); return; }
-        int rowNumber = 0;
+        boolean hasCompleted = false;
         for (Download d : entries) {
+            if (d.state == Download.STATE_COMPLETED) {
+                hasCompleted = true;
+                showSavedVideo(d);
+                continue;
+            }
             LinearLayout card = card();
-            add(list, card, 12);
-            TextView number = text(String.format(Locale.ROOT, "%02d / VIDEO", ++rowNumber), 11, ink);
-            number.setTypeface(android.graphics.Typeface.MONOSPACE, Typeface.BOLD);
-            number.setBackgroundColor(d.state == Download.STATE_FAILED ? Bauhaus.RED : Bauhaus.YELLOW);
-            number.setTextColor(d.state == Download.STATE_FAILED ? Color.WHITE : ink);
-            number.setPadding(dp(8), dp(5), dp(8), dp(5));
-            card.addView(number, new LinearLayout.LayoutParams(-2, -2));
+            add(pendingList, card, 12);
             String name = new String(d.request.data, StandardCharsets.UTF_8);
             TextView nameView = text(name.isEmpty() ? "视频" : name, 20, ink);
             nameView.setTypeface(null, Typeface.BOLD);
@@ -282,64 +280,91 @@ public final class MainActivity extends Activity {
             add(card, detail, 6);
             ProgressBar progress = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
             progress.setMax(100);
-            progress.setProgressTintList(android.content.res.ColorStateList.valueOf(Bauhaus.BLUE));
-            progress.setProgressBackgroundTintList(android.content.res.ColorStateList.valueOf(Bauhaus.PAPER));
+            progress.setProgressTintList(android.content.res.ColorStateList.valueOf(QuietStyle.ACCENT));
+            progress.setProgressBackgroundTintList(android.content.res.ColorStateList.valueOf(QuietStyle.PAPER));
             rowProgress.put(d.request.id, progress);
             progress.setProgress(d.state == Download.STATE_COMPLETED ? 100 : Math.max(0, (int) d.getPercentDownloaded()));
             progress.setIndeterminate(d.state == Download.STATE_DOWNLOADING && d.getPercentDownloaded() < 0);
             add(card, progress, 8);
             updateProgress(d);
             LinearLayout actions = row();
-            if (d.state == Download.STATE_COMPLETED) {
-                actions.addView(button("离线播放", true, v -> startActivity(PlayerActivity.offline(this, d.request))), weighted());
-            } else if (d.state == Download.STATE_FAILED) {
+            if (d.state == Download.STATE_FAILED) {
                 actions.addView(button("处理失败", false, v -> handleFailures(d)), weighted());
             } else if (d.state != Download.STATE_REMOVING) {
                 boolean stopped = d.stopReason != Download.STOP_REASON_NONE;
                 actions.addView(button(stopped ? "继续" : "暂停", false, v ->
                         DownloadService.sendSetStopReason(this, VideoDownloadService.class, d.request.id, stopped ? 0 : 1, false)), weighted());
             }
-            if ((d.state == Download.STATE_COMPLETED || d.state == Download.STATE_FAILED) && !app.problems().skipped(d.request.id).isEmpty()) {
-                actions.addView(button("补全", false, v -> {
-                    app.problems().restore(d.request.id);
-                    DownloadService.sendAddDownload(this, VideoDownloadService.class, d.request, false);
-                }), weighted());
-            }
             actions.addView(button("删除", false, v -> new AlertDialog.Builder(this)
                     .setTitle("删除下载？").setMessage("将移除此视频和本地下载文件。")
                     .setNegativeButton("取消", null).setPositiveButton("删除", (dialog, which) -> {
+                        app.thumbnails().remove(d.request.id);
                         DownloadService.sendRemoveDownload(this, VideoDownloadService.class, d.request.id, false);
                     }).show()), weighted());
             add(card, actions, 8);
         }
+        if (!hasCompleted) list.addView(empty);
+    }
+    private void showSavedVideo(Download d) {
+        LinearLayout card = card();
+        add(list, card, 12);
+        ImageView cover = new ImageView(this);
+        cover.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
+        cover.setBackgroundColor(QuietStyle.SOFT);
+        cover.setImageResource(R.drawable.ic_video_placeholder);
+        cover.setContentDescription("播放视频");
+        card.addView(cover, new LinearLayout.LayoutParams(-1, dp(170)));
+        app.thumbnails().load(d.request, cover);
+        String name = new String(d.request.data, StandardCharsets.UTF_8);
+        add(card, text(name.isEmpty() ? "视频" : name, 16, ink), 10);
+        add(card, text(app.problems().skipped(d.request.id).isEmpty() ? "离线视频" : "离线视频 · 已丢弃缺失片段", 12, QuietStyle.MUTED), 4);
+        View.OnClickListener play = v -> startActivity(PlayerActivity.offline(this, d.request));
+        card.setOnClickListener(play); cover.setOnClickListener(play);
+        card.setContentDescription("播放 " + name);
+        View.OnLongClickListener remove = v -> {
+            new AlertDialog.Builder(this).setTitle("删除此视频？").setNegativeButton("取消", null)
+                    .setPositiveButton("删除", (dialog, which) -> {
+                        app.thumbnails().remove(d.request.id);
+                        DownloadService.sendRemoveDownload(this, VideoDownloadService.class, d.request.id, false);
+                    }).show();
+            return true;
+        };
+        card.setOnLongClickListener(remove);
+        cover.setOnLongClickListener(remove);
     }
     private void handleFailures(Download d) {
         List<DownloadProblems.Failure> failures = app.problems().failures(d.request.id);
-        String[] labels = new String[failures.size()];
-        boolean[] selected = new boolean[failures.size()];
-        for (int i = 0; i < labels.length; i++) labels[i] = failures.get(i).label + (failures.get(i).skippable ? "" : "（不可丢弃）");
-        new AlertDialog.Builder(this).setTitle("失败资源 " + failures.size() + " 个")
-                .setMultiChoiceItems(labels, selected, (dialog, which, checked) -> selected[which] = checked)
+        StringBuilder details = new StringBuilder();
+        for (DownloadProblems.Failure failure : failures) details.append(failure.label).append("\n");
+        if (app.problems().archiving(d.request.id)) {
+            new AlertDialog.Builder(this).setTitle("本地归档未完成").setMessage(details + "\n本地资源不完整，无法生成可播放的视频。此任务不会再联网下载。")
+                    .setPositiveButton("知道了", null).show();
+            return;
+        }
+        new AlertDialog.Builder(this).setTitle("下载失败").setMessage(details.toString())
                 .setNegativeButton("取消", null)
-                .setNeutralButton("重试失败资源", (dialog, which) -> DownloadService.sendAddDownload(this, VideoDownloadService.class, d.request, false))
-                .setPositiveButton("丢弃勾选分片", (dialog, which) -> {
-                    Set<String> ids = new HashSet<>();
-                    for (int i = 0; i < selected.length; i++) if (selected[i] && failures.get(i).skippable) ids.add(failures.get(i).id);
-                    if (ids.isEmpty()) { message("请勾选可丢弃的视频分片；密钥和播放列表不可丢弃"); return; }
-                    new AlertDialog.Builder(this).setTitle("丢弃 " + ids.size() + " 个分片？")
-                            .setMessage("视频会缺少这些片段，播放可能出现跳跃或短暂无画面。已下载内容保留。")
-                            .setNegativeButton("取消", null).setPositiveButton("丢弃并继续", (confirm, action) -> {
-                                app.problems().discard(d.request.id, ids);
-                                DownloadService.sendAddDownload(this, VideoDownloadService.class, d.request, false);
-                            }).show();
-                }).show();
+                .setNeutralButton("重试", (dialog, which) -> DownloadService.sendAddDownload(this, VideoDownloadService.class, d.request, false))
+                .setPositiveButton("丢弃并保存", (dialog, which) -> new AlertDialog.Builder(this)
+                        .setTitle("保存现有视频？").setMessage("所有失败分片将被丢弃。视频会缺段，保存后移至已下载，不再重试或补全。")
+                        .setNegativeButton("取消", null).setPositiveButton("保存", (confirm, action) -> {
+                            app.queries.execute(() -> {
+                                try {
+                                    app.problems().archive(d.request.id);
+                                    handler.post(() -> {
+                                        DownloadService.sendAddDownload(this, VideoDownloadService.class, d.request, false);
+                                        showPage(1);
+                                        message("正在整理本地视频");
+                                    });
+                                } catch (IllegalStateException e) { handler.post(() -> message(e.getMessage())); }
+                            });
+                        }).show()).show();
     }
     private String stateText(Download d) {
         switch (d.state) {
             case Download.STATE_COMPLETED: return "已完成";
             case Download.STATE_DOWNLOADING: return d.getPercentDownloaded() < 0 ? "下载中" : String.format(Locale.CHINA, "下载中 %.0f%%", d.getPercentDownloaded());
             case Download.STATE_STOPPED: return "已暂停";
-            case Download.STATE_FAILED: return "部分资源失败 · 可重试或丢弃分片";
+            case Download.STATE_FAILED: return app.problems().archiving(d.request.id) ? "本地归档未完成" : "部分资源失败";
             case Download.STATE_REMOVING: return "删除中";
             default: return app.downloads().getNotMetRequirements() != 0 ? "等待网络" : "排队中";
         }
@@ -350,14 +375,14 @@ public final class MainActivity extends Activity {
     private LinearLayout row() { LinearLayout v = new LinearLayout(this); v.setOrientation(LinearLayout.HORIZONTAL); return v; }
     private LinearLayout card() {
         LinearLayout v = column(); v.setPadding(dp(16), dp(16), dp(16), dp(16));
-        v.setBackground(Bauhaus.panel(this, Color.rgb(255, 252, 245), 2)); return v;
+        v.setBackground(QuietStyle.panel(this, Color.WHITE, 0)); return v;
     }
     private TextView text(String value, int size, int color) {
         TextView v = new TextView(this); v.setText(value); v.setTextSize(size); v.setTextColor(color); return v;
     }
     private Button button(String label, boolean primary, View.OnClickListener click) {
         Button b = new Button(this); b.setText(label);
-        Bauhaus.button(b, primary ? Bauhaus.BLUE : Bauhaus.PAPER, primary ? Color.WHITE : ("删除".equals(label) ? Bauhaus.RED : ink));
+        QuietStyle.button(b, primary ? QuietStyle.ACCENT : QuietStyle.PAPER, primary ? Color.WHITE : ("删除".equals(label) ? QuietStyle.RED : ink));
         b.setOnClickListener(click); return b;
     }
     private LinearLayout.LayoutParams weighted() {

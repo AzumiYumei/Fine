@@ -9,4 +9,7 @@
     <item name="player_view" type="id" />
     <item name="player_header" type="id" />
     <item name="fullscreen_toggle" type="id" />
+    <item name="player_controls" type="id" />
+    <item name="playback_progress" type="id" />
+    <item name="playback_settings" type="id" />
 </resources>

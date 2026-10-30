@@ -34,10 +34,11 @@ final class ParallelHlsDownloader implements Downloader {
         }
     }
     ParallelHlsDownloader(DownloadRequest request, CacheDataSource.Factory factory, DownloadProblems problems, int threads) {
-        this.request = request; this.factory = factory; this.problems = problems; this.threads = threads;
+        this.request = request; this.factory = problems.archiving(request.id) ? new CacheDataSource.Factory().setCache(factory.getCache()).setUpstreamDataSourceFactory(null) : factory; this.problems = problems; this.threads = threads;
     }
     @Override public void download(ProgressListener listener) throws IOException, InterruptedException {
         checkCancelled();
+        if (problems.sealed(request.id)) return;
         cached.clear(); done = 0;
         LinkedHashMap<String, Part> parts = new LinkedHashMap<>();
         HlsPlaylist root = manifest(request.uri);
@@ -93,6 +94,7 @@ final class ParallelHlsDownloader implements Downloader {
         }
         checkCancelled();
         if (failures > 0) throw new IOException(failures + " 个资源失败，请重试或处理失败分片");
+        problems.seal(request.id);
     }
     private HlsPlaylist manifest(Uri uri) throws IOException, InterruptedException {
         String id = RetryPolicy.segmentId(uri.toString(), 0, -1);

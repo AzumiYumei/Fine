@@ -16,6 +16,8 @@ public final class FineApp extends Application {
     private SimpleCache cache;
     private DefaultHttpDataSource.Factory network;
     private DownloadProblems problems;
+    private Thumbnails thumbnails;
+    Thumbnails thumbnails() { if(thumbnails==null) thumbnails=new Thumbnails(this); return thumbnails; }
     public final java.util.concurrent.ExecutorService queries = java.util.concurrent.Executors.newSingleThreadExecutor();
     public DownloadProblems problems() { downloads(); return problems; }
     public int parallelism() { return getSharedPreferences("settings", 0).getInt("threads", 6); }
@@ -30,7 +32,7 @@ public final class FineApp extends Application {
             problems = new DownloadProblems(this);
             downloads = new DownloadManager(this, new DefaultDownloadIndex(database), request ->
                     new ParallelHlsDownloader(request, new CacheDataSource.Factory().setCache(cache)
-                            .setUpstreamDataSourceFactory(network), problems, parallelism()));
+                            .setUpstreamDataSourceFactory(problems.archiving(request.id) ? null : network), problems, parallelism()));
             downloads.setMaxParallelDownloads(1);
             // Per-resource retries are handled by our downloader. Avoid restarting the whole queue.
             downloads.setMinRetryCount(0);

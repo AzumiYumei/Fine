@@ -100,6 +100,23 @@ public class DownloaderTest {
         problems.discard("test", Collections.singleton("key"));
         assertTrue(problems.skipped("test").isEmpty());
         assertEquals(1, problems.failures("test").size());
+        try { problems.archive("test"); fail("Required key must block archiving"); }
+        catch (IllegalStateException expected) { }
+    }
+    @Test public void archiveNeverDownloadsAgainAndSurvivesRestart() throws Exception {
+        try { downloader().download(null); fail("Expected partial failure"); } catch (IOException expected) { }
+        int requests = server.getRequestCount();
+        problems.archive("test");
+        assertTrue(problems.archiving("test"));
+        downloader().download(null);
+        assertTrue(problems.sealed("test"));
+        assertEquals(requests, server.getRequestCount());
+        DownloadProblems restored = new DownloadProblems(RuntimeEnvironment.getApplication());
+        assertTrue(restored.sealed("test"));
+        assertEquals(1, restored.skipped("test").size());
+        // Even a later retry command cannot reopen network or download the discarded fragment.
+        server.shutdown();
+        new ParallelHlsDownloader(request(), factory, restored, 3).download(null);
     }
     @Test public void byteRangeDiscardOnlyMarksSelectedRange() throws Exception {
         String text = "#EXTM3U\n#EXT-X-TARGETDURATION:5\n#EXTINF:5,\n#EXT-X-BYTERANGE:10@0\nall.ts\n#EXTINF:5,\n#EXT-X-BYTERANGE:10\nall.ts\n#EXT-X-ENDLIST\n";

@@ -55,7 +55,17 @@ final class DownloadProblems {
         for (String id : skip) resolved(task, id);
     }
     synchronized void clear(String task) {
-        prefs.edit().remove(task + ".fail").remove(task + ".skip").apply();
+        prefs.edit().remove(task + ".fail").remove(task + ".skip").remove(task + ".archive").remove(task + ".sealed").apply();
     }
-    synchronized void restore(String task) { prefs.edit().remove(task + ".skip").apply(); }
+    synchronized boolean archiving(String task) { return prefs.getBoolean(task + ".archive", false); }
+    synchronized boolean sealed(String task) { return prefs.getBoolean(task + ".sealed", false); }
+    synchronized void seal(String task) { prefs.edit().putBoolean(task + ".sealed", true).apply(); }
+    synchronized void archive(String task) {
+        List<Failure> all = failures(task);
+        for (Failure f : all) if (!f.skippable) throw new IllegalStateException("密钥、播放列表或存储异常仍未解决，无法归档");
+        Set<String> skip = skipped(task);
+        for (Failure f : all) skip.add(f.id);
+        if (!prefs.edit().putStringSet(task + ".skip", skip).putString(task + ".fail", "[]")
+                .putBoolean(task + ".archive", true).commit()) throw new IllegalStateException("无法保存归档记录");
+    }
 }

@@ -2,15 +2,15 @@
     <style name="AppTheme" parent="BaseTheme" />
     <style name="BaseTheme" parent="android:style/Theme.Material.Light.NoActionBar">
         <item name="android:fontFamily">sans</item>
-        <item name="android:colorAccent">#1F46B8</item>
-        <item name="android:colorBackground">#F4EFE4</item>
-        <item name="android:textColorPrimary">#191919</item>
-        <item name="android:textColorSecondary">#625E56</item>
+        <item name="android:colorAccent">#3D6D5F</item>
+        <item name="android:colorBackground">#F7F8F7</item>
+        <item name="android:textColorPrimary">#28302E</item>
+        <item name="android:textColorSecondary">#717A76</item>
         <item name="android:windowLightStatusBar">true</item>
-        <item name="android:statusBarColor">#F4EFE4</item>
-        <item name="android:navigationBarColor">#191919</item>
+        <item name="android:statusBarColor">#F7F8F7</item>
+        <item name="android:navigationBarColor">#28302E</item>
         <item name="android:windowActionModeOverlay">true</item>
-        <item name="android:windowBackground">#F4EFE4</item>
+        <item name="android:windowBackground">#F7F8F7</item>
     </style>
     <string name="download_channel">视频下载</string>
     <string name="playback_error">播放失败：%1$s\n请检查链接、网络或视频编码是否受设备支持。</string>

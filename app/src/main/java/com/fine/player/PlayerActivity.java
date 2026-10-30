@@ -24,9 +24,24 @@ import java.nio.charset.StandardCharsets;
 @androidx.media3.common.util.UnstableApi
 public final class PlayerActivity extends Activity {
     private PlayerView video;
-    private LinearLayout header;
-    private TextView status;
-    private Button videoFullscreen;
+    private LinearLayout controls;
+    private androidx.media3.ui.DefaultTimeBar progress;
+    private ImageButton videoFullscreen;
+    private boolean scrubbing;
+    private final android.os.Handler handler = new android.os.Handler(android.os.Looper.getMainLooper());
+    private final Runnable hide = () -> { if (!scrubbing && controls != null) controls.setVisibility(View.GONE); };
+    private final Runnable tick = new Runnable() {
+        @Override public void run() {
+            if (player != null && !scrubbing) {
+                long duration = player.getDuration();
+                progress.setDuration(duration == C.TIME_UNSET ? 0 : duration);
+                progress.setPosition(player.getCurrentPosition());
+                progress.setBufferedPosition(player.getBufferedPosition());
+                progress.setEnabled(player.isCurrentMediaItemSeekable());
+            }
+            handler.postDelayed(this, 250);
+        }
+    };
     private ExoPlayer player;
     private MediaItem media;
     private DownloadRequest download;
@@ -53,61 +68,93 @@ public final class PlayerActivity extends Activity {
             playWhenReady = state.getBoolean("playing", true);
             fullscreen = state.getBoolean("fullscreen", false);
         } else fullscreen = getResources().getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE;
-        LinearLayout root = new LinearLayout(this);
-        root.setOrientation(LinearLayout.VERTICAL);
+        FrameLayout root = new FrameLayout(this);
         root.setBackgroundColor(Color.BLACK);
-        header = new LinearLayout(this);
-        header.setId(R.id.player_header);
-        header.setGravity(android.view.Gravity.CENTER_VERTICAL);
-        header.setBackgroundColor(Bauhaus.PAPER);
-        header.setPadding(dp(8), dp(8), dp(8), dp(8));
-        Button back = new Button(this);
-        Bauhaus.button(back, Bauhaus.PAPER, Bauhaus.INK);
-        back.setText("返回"); back.setContentDescription("返回上一页");
-        back.setOnClickListener(v -> finish());
-        header.addView(back, new LinearLayout.LayoutParams(dp(76), dp(56)));
-        TextView title = new TextView(this);
-        String name = getIntent().getStringExtra("title");
-        title.setText(name == null || name.isEmpty() ? "视频播放" : name);
-        title.setTextColor(Bauhaus.INK); title.setTextSize(18);
-        title.setTypeface(null, android.graphics.Typeface.BOLD);
-        title.setPadding(dp(12), 0, dp(12), 0); title.setMaxLines(1);
-        title.setEllipsize(android.text.TextUtils.TruncateAt.END);
-        header.addView(title, new LinearLayout.LayoutParams(0, -2, 1));
-        Button expand = new Button(this);
-        Bauhaus.button(expand, Bauhaus.YELLOW, Bauhaus.INK);
-        expand.setId(R.id.fullscreen_toggle); expand.setText("全屏");
-        expand.setOnClickListener(v -> setFullscreen(true, true));
-        header.addView(expand, new LinearLayout.LayoutParams(dp(76), dp(56)));
-        root.addView(header);
         video = new PlayerView(this);
         video.setId(R.id.player_view);
-        video.setShowBuffering(PlayerView.SHOW_BUFFERING_WHEN_PLAYING);
-        videoFullscreen = new Button(this);
-        Bauhaus.button(videoFullscreen, Bauhaus.YELLOW, Bauhaus.INK);
-        videoFullscreen.setText("全屏");
+        video.setUseController(false);
+        video.setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER);
+        video.setOnClickListener(v -> {
+            if (controls.getVisibility() == View.VISIBLE) { controls.setVisibility(View.GONE); handler.removeCallbacks(hide); }
+            else showControls();
+        });
+        root.addView(video, new FrameLayout.LayoutParams(-1, -1));
+        controls = new LinearLayout(this);
+        controls.setId(R.id.player_controls);
+        controls.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        controls.setPadding(dp(12), 0, dp(8), 0);
+        controls.setBackgroundColor(Color.TRANSPARENT);
+        progress = new androidx.media3.ui.DefaultTimeBar(this, null);
+        progress.setId(R.id.playback_progress);
+        progress.setPlayedColor(Color.WHITE);
+        progress.setScrubberColor(Color.WHITE);
+        progress.setBufferedColor(0x99FFFFFF);
+        progress.setUnplayedColor(0x55777777);
+        progress.addListener(new androidx.media3.ui.TimeBar.OnScrubListener() {
+            @Override public void onScrubStart(androidx.media3.ui.TimeBar bar, long value) { scrubbing = true; handler.removeCallbacks(hide); }
+            @Override public void onScrubMove(androidx.media3.ui.TimeBar bar, long value) { }
+            @Override public void onScrubStop(androidx.media3.ui.TimeBar bar, long value, boolean canceled) {
+                if (player != null && !canceled) player.seekTo(value);
+                scrubbing = false; showControls();
+            }
+        });
+        controls.addView(progress, new LinearLayout.LayoutParams(0, dp(44), 1));
+        ImageButton settings = icon(R.drawable.ic_settings, "播放设置");
+        settings.setId(R.id.playback_settings);
+        settings.setOnClickListener(v -> showSettings());
+        controls.addView(settings, new LinearLayout.LayoutParams(dp(44), dp(44)));
+        videoFullscreen = icon(R.drawable.ic_fullscreen, "全屏");
+        videoFullscreen.setId(R.id.fullscreen_toggle);
         videoFullscreen.setOnClickListener(v -> setFullscreen(!fullscreen, true));
-        FrameLayout.LayoutParams toggle = new FrameLayout.LayoutParams(dp(100), dp(48), android.view.Gravity.TOP | android.view.Gravity.END);
-        toggle.setMargins(dp(12), dp(12), dp(12), dp(12));
-        video.addView(videoFullscreen, toggle);
-        video.setControllerVisibilityListener((PlayerView.ControllerVisibilityListener) visibility -> videoFullscreen.setVisibility(fullscreen ? visibility : View.GONE));
-        root.addView(video, new LinearLayout.LayoutParams(-1, 0, 1));
-        status = new TextView(this);
-        status.setTextColor(Bauhaus.PAPER); status.setPadding(dp(20), dp(12), dp(20), dp(16));
-        status.setText(download != null ? "离线播放" : "在线播放");
-        root.addView(status);
+        controls.addView(videoFullscreen, new LinearLayout.LayoutParams(dp(44), dp(44)));
+        FrameLayout.LayoutParams bottom = new FrameLayout.LayoutParams(-1, dp(48), android.view.Gravity.BOTTOM);
+        bottom.bottomMargin = dp(8);
+        root.addView(controls, bottom);
         setContentView(root);
         getWindow().getDecorView().setSystemUiVisibility(0);
         getWindow().setStatusBarColor(Color.BLACK); getWindow().setNavigationBarColor(Color.BLACK);
         setFullscreen(fullscreen, false);
     }
+    private ImageButton icon(int resource, String description) {
+        ImageButton button = new ImageButton(this);
+        button.setImageResource(resource); button.setContentDescription(description);
+        button.setBackgroundColor(Color.TRANSPARENT); button.setPadding(dp(11), dp(11), dp(11), dp(11));
+        button.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        return button;
+    }
+    private void showControls() { controls.setVisibility(View.VISIBLE); handler.removeCallbacks(hide); handler.postDelayed(hide, 3500); }
+    private void showSettings() {
+        handler.removeCallbacks(hide);
+        if (player == null) return;
+        android.app.AlertDialog dialog = new android.app.AlertDialog.Builder(this).setTitle("播放设置")
+                .setItems(new String[]{player.isPlaying() ? "暂停" : "继续播放", "播放速度", "画面比例", "重新加载"}, (d, which) -> {
+                    if (player == null) return;
+                    if (which == 0) player.setPlayWhenReady(!player.getPlayWhenReady());
+                    if (which == 1) {
+                        float[] speeds = {.5f, 1f, 1.25f, 1.5f, 2f};
+                        android.app.AlertDialog speed = new android.app.AlertDialog.Builder(this).setTitle("播放速度")
+                                .setItems(new String[]{"0.5×", "1×", "1.25×", "1.5×", "2×"}, (s, index) -> { if (player != null) player.setPlaybackSpeed(speeds[index]); }).create();
+                        showUndimmed(speed);
+                    }
+                    if (which == 2) {
+                        android.app.AlertDialog aspect = new android.app.AlertDialog.Builder(this).setTitle("画面比例")
+                                .setItems(new String[]{"适应画面", "填满（裁剪）"}, (s, index) -> video.setResizeMode(index == 0 ? androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT : androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM)).create();
+                        showUndimmed(aspect);
+                    }
+                    if (which == 3) { player.prepare(); player.play(); }
+                }).create();
+        dialog.setOnDismissListener(d -> showControls());
+        showUndimmed(dialog);
+    }
+    private void showUndimmed(android.app.AlertDialog dialog) {
+        dialog.show();
+        if (dialog.getWindow() != null) { dialog.getWindow().clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND); dialog.getWindow().setDimAmount(0); }
+    }
     private int dp(int value) { return Math.round(value * getResources().getDisplayMetrics().density); }
     private void setFullscreen(boolean value, boolean rotate) {
         fullscreen = value;
-        header.setVisibility(value ? View.GONE : View.VISIBLE);
-        status.setVisibility(value ? View.GONE : View.VISIBLE);
-        videoFullscreen.setText(value ? "退出全屏" : "全屏");
-        videoFullscreen.setVisibility(value ? View.VISIBLE : View.GONE);
+        videoFullscreen.setImageResource(value ? R.drawable.ic_fullscreen_exit : R.drawable.ic_fullscreen);
+        videoFullscreen.setContentDescription(value ? "退出全屏" : "全屏");
         if (Build.VERSION.SDK_INT >= 30) {
             WindowInsetsController bars = getWindow().getInsetsController();
             if (bars != null) {
@@ -144,17 +191,9 @@ public final class PlayerActivity extends Activity {
                 if (playing) getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
                 else getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
             }
-            @Override public void onPlaybackStateChanged(int state) {
-                if (state == Player.STATE_BUFFERING) status.setText("正在加载视频…");
-                else if (state == Player.STATE_READY) status.setText(download != null ? "离线播放 · 无需网络" : "在线播放");
-                else if (state == Player.STATE_ENDED) status.setText("播放完毕");
-            }
             @Override public void onPlayerError(PlaybackException error) {
-                String message = getString(R.string.playback_error, error.getErrorCodeName());
-                status.setText(message);
-                // Remains visible even with the surrounding page hidden in fullscreen.
-                video.setCustomErrorMessage(message);
-                video.showController();
+                Toast.makeText(PlayerActivity.this, getString(R.string.playback_error, error.getErrorCodeName()), Toast.LENGTH_LONG).show();
+                showControls();
             }
         });
         if (download != null) player.setMediaSource(new HlsMediaSource.Factory(app.source(true))
@@ -170,9 +209,9 @@ public final class PlayerActivity extends Activity {
         }
         getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
     }
-    @Override protected void onStart() { super.onStart(); if (!isFinishing()) startPlayer(); }
-    @Override protected void onStop() { releasePlayer(); super.onStop(); }
-    @Override protected void onDestroy() { releasePlayer(); super.onDestroy(); }
+    @Override protected void onStart() { super.onStart(); if (!isFinishing()) { startPlayer(); handler.post(tick); showControls(); } }
+    @Override protected void onStop() { handler.removeCallbacksAndMessages(null); releasePlayer(); super.onStop(); }
+    @Override protected void onDestroy() { handler.removeCallbacksAndMessages(null); releasePlayer(); super.onDestroy(); }
     @Override protected void onSaveInstanceState(Bundle state) {
         state.putLong("position", player != null ? player.getCurrentPosition() : position);
         state.putBoolean("playing", player != null ? player.getPlayWhenReady() : playWhenReady);

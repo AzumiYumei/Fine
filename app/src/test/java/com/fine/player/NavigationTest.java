@@ -25,11 +25,11 @@ public class NavigationTest {
         try (ActivityController<PlayerActivity> controller = Robolectric.buildActivity(PlayerActivity.class, intent).create()) {
             PlayerActivity activity = controller.get();
             activity.findViewById(R.id.fullscreen_toggle).performClick();
-            assertEquals(View.GONE, activity.findViewById(R.id.player_header).getVisibility());
+            assertNull(activity.findViewById(R.id.player_header));
             assertEquals(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE, activity.getRequestedOrientation());
             activity.onBackPressed();
             assertFalse(activity.isFinishing());
-            assertEquals(View.VISIBLE, activity.findViewById(R.id.player_header).getVisibility());
+            assertNull(activity.findViewById(R.id.player_header));
             assertEquals(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT, activity.getRequestedOrientation());
             activity.onBackPressed();
             assertTrue(activity.isFinishing());
@@ -48,6 +48,19 @@ public class NavigationTest {
         try (ActivityController<PlayerActivity> controller = Robolectric.buildActivity(PlayerActivity.class).create()) {
             assertTrue(controller.get().isFinishing());
             assertNull(controller.get().findViewById(R.id.player_view));
+        }
+    }
+    @Test public void controlsHaveNoScrimAndOnlyThreeElements() {
+        Intent intent = PlayerActivity.online(RuntimeEnvironment.getApplication(), "https://example.com/v.m3u8", "测试");
+        try (ActivityController<PlayerActivity> controller = Robolectric.buildActivity(PlayerActivity.class, intent).create()) {
+            PlayerActivity activity = controller.get();
+            android.widget.LinearLayout controls = activity.findViewById(R.id.player_controls);
+            assertEquals(3, controls.getChildCount());
+            assertEquals(android.graphics.Color.TRANSPARENT, ((android.graphics.drawable.ColorDrawable)controls.getBackground()).getColor());
+            assertFalse(((androidx.media3.ui.PlayerView)activity.findViewById(R.id.player_view)).getUseController());
+            assertNotNull(activity.findViewById(R.id.playback_progress));
+            assertNotNull(activity.findViewById(R.id.playback_settings));
+            assertTrue(activity.findViewById(R.id.fullscreen_toggle) instanceof android.widget.ImageButton);
         }
     }
 }
