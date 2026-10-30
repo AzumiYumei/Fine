@@ -26,7 +26,7 @@ import java.util.*;
 @androidx.media3.common.util.UnstableApi
 public final class MainActivity extends Activity {
     private final Handler handler = new Handler(Looper.getMainLooper());
-    private final int ink = Color.rgb(25, 47, 44), green = Color.rgb(8, 127, 112);
+    private final int ink = Bauhaus.INK, green = Bauhaus.BLUE;
     private FineApp app;
     private EditText url, title;
     private TextView status, empty;
@@ -61,6 +61,7 @@ public final class MainActivity extends Activity {
 
     private void buildUi() {
         LinearLayout shell = column();
+        shell.setBackgroundColor(Bauhaus.PAPER);
         FrameLayout pages = new FrameLayout(this);
         shell.addView(pages, new LinearLayout.LayoutParams(-1, 0, 1));
         downloadPage = new ScrollView(this);
@@ -72,52 +73,54 @@ public final class MainActivity extends Activity {
         pages.addView(downloadPage, new FrameLayout.LayoutParams(-1, -1));
         pages.addView(libraryPage, new FrameLayout.LayoutParams(-1, -1));
         LinearLayout tabs = row();
-        tabs.setPadding(dp(16), dp(6), dp(16), dp(6));
-        tabs.setBackgroundColor(Color.WHITE);
-        downloadTab = button("下载", true, v -> showPage(0));
+        tabs.setPadding(dp(16), dp(12), dp(16), dp(12));
+        tabs.setBackground(Bauhaus.panel(this, Bauhaus.PAPER, 1));
+        downloadTab = button("01   下载", true, v -> showPage(0));
         downloadTab.setId(R.id.download_tab);
-        libraryTab = button("我的下载", false, v -> showPage(1));
+        libraryTab = button("02   我的下载", false, v -> showPage(1));
         libraryTab.setId(R.id.library_tab);
         tabs.addView(downloadTab, weighted());
         tabs.addView(libraryTab, weighted());
         shell.addView(tabs);
         setContentView(shell);
         LinearLayout root = column();
-        root.setPadding(dp(22), dp(24), dp(22), dp(24));
+        root.setPadding(dp(24), dp(20), dp(24), dp(20));
         downloadPage.addView(root);
-        TextView brand = text("FINE / 轻播", 13, green);
-        brand.setTypeface(null, Typeface.BOLD);
-        root.addView(brand);
-        TextView heading = text("下载视频", 28, ink);
-        heading.setTypeface(null, Typeface.BOLD);
-        add(root, heading, 10);
-        add(root, text("粘贴视频链接，下载或直接播放", 14, Color.GRAY), 8);
+        root.addView(Bauhaus.header(this, "01", "下载视频", "输入 M3U8 链接，下载或直接播放。"));
 
         LinearLayout input = card();
         add(root, input, 24);
-        input.addView(text("视频链接", 14, ink));
+        input.addView(text("链接 / URL", 12, ink));
         url = new EditText(this);
         url.setId(R.id.video_url);
         url.setHint("https://example.com/video.m3u8");
         url.setTextSize(14);
         url.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
         url.setSingleLine(true);
-        input.addView(url, new LinearLayout.LayoutParams(-1, dp(52)));
+        Bauhaus.input(url);
+        LinearLayout.LayoutParams urlSize = new LinearLayout.LayoutParams(-1, dp(52));
+        urlSize.topMargin = dp(10);
+        input.addView(url, urlSize);
         title = new EditText(this);
         title.setId(R.id.video_title);
         title.setHint("视频名称（可选）");
         title.setTextSize(14);
         title.setSingleLine(true);
-        input.addView(title, new LinearLayout.LayoutParams(-1, dp(48)));
+        Bauhaus.input(title);
+        LinearLayout.LayoutParams titleSize = new LinearLayout.LayoutParams(-1, dp(48));
+        titleSize.topMargin = dp(10);
+        input.addView(title, titleSize);
         LinearLayout actions = row();
         actions.addView(button("粘贴", false, v -> paste()), weighted());
         Button play = button("播放", true, v -> playInput());
         play.setId(R.id.play_online);
+        Bauhaus.button(play, Bauhaus.BLUE, Color.WHITE);
         actions.addView(play, weighted());
         downloadButton = button("下载", false, v -> download());
+        Bauhaus.button(downloadButton, Bauhaus.RED, Color.WHITE);
         actions.addView(downloadButton, weighted());
         add(input, actions, 12);
-        add(input, text("不限速 · 自动重试 3 次 · 使用当前网络", 12, Color.GRAY), 10);
+        add(input, text("不限速 · 自动重试 3 次 · 使用当前网络", 12, Bauhaus.MUTED), 10);
         Button concurrency = button("下载并发：" + app.parallelism() + " 线程", false, null);
         concurrency.setOnClickListener(v -> {
             int[] values = {2, 4, 6, 8};
@@ -128,20 +131,18 @@ public final class MainActivity extends Activity {
         });
         add(input, concurrency, 6);
 
-        status = text("支持 M3U8 点播与直播在线播放", 13, green);
+        status = text("●  M3U8     /     在线与离线", 12, ink);
         add(root, status, 18);
         LinearLayout library = column();
-        library.setPadding(dp(22), dp(24), dp(22), dp(24));
+        library.setPadding(dp(24), dp(20), dp(24), dp(20));
         libraryPage.addView(library);
-        library.addView(text("FINE / 视频库", 13, green));
-        TextView downloads = text("我的下载", 22, ink);
-        downloads.setTypeface(null, Typeface.BOLD);
-        add(library, downloads, 12);
-        add(library, text("管理下载进度，或打开已保存的视频", 13, Color.GRAY), 8);
+        library.addView(Bauhaus.header(this, "02", "我的下载", "管理下载进度，离线播放已保存的视频。"));
         list = column();
         add(library, list, 20);
-        empty = text("还没有下载\n添加一个视频，把喜欢的内容留在本地。", 14, Color.GRAY);
-        empty.setPadding(dp(16), dp(24), dp(16), dp(24));
+        empty = text("还没有下载\n添加一个视频，把喜欢的内容留在本地。", 14, Bauhaus.MUTED);
+        empty.setPadding(dp(20), dp(32), dp(20), dp(32));
+        empty.setBackground(Bauhaus.panel(this, Bauhaus.YELLOW, 1));
+        empty.setTextColor(ink);
         list.addView(empty);
     }
 
@@ -170,10 +171,8 @@ public final class MainActivity extends Activity {
         libraryPage.setVisibility(page == 1 ? View.VISIBLE : View.GONE);
         downloadTab.setSelected(page == 0);
         libraryTab.setSelected(page == 1);
-        downloadTab.setTextColor(page == 0 ? Color.WHITE : green);
-        libraryTab.setTextColor(page == 1 ? Color.WHITE : green);
-        downloadTab.setBackgroundTintList(android.content.res.ColorStateList.valueOf(page == 0 ? green : Color.rgb(230,242,237)));
-        libraryTab.setBackgroundTintList(android.content.res.ColorStateList.valueOf(page == 1 ? green : Color.rgb(230,242,237)));
+        Bauhaus.button(downloadTab, page == 0 ? ink : Bauhaus.PAPER, page == 0 ? Bauhaus.YELLOW : ink);
+        Bauhaus.button(libraryTab, page == 1 ? ink : Bauhaus.PAPER, page == 1 ? Bauhaus.YELLOW : ink);
         handler.removeCallbacks(refresh);
         if (visible && page == 1) handler.post(refresh);
         android.view.inputmethod.InputMethodManager keyboard = (android.view.inputmethod.InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
@@ -264,16 +263,27 @@ public final class MainActivity extends Activity {
         rowStatus.clear(); rowProgress.clear();
         list.removeAllViews();
         if (entries.isEmpty()) { list.addView(empty); return; }
+        int rowNumber = 0;
         for (Download d : entries) {
             LinearLayout card = card();
-            add(list, card, 8);
+            add(list, card, 12);
+            TextView number = text(String.format(Locale.ROOT, "%02d / VIDEO", ++rowNumber), 11, ink);
+            number.setTypeface(android.graphics.Typeface.MONOSPACE, Typeface.BOLD);
+            number.setBackgroundColor(d.state == Download.STATE_FAILED ? Bauhaus.RED : Bauhaus.YELLOW);
+            number.setTextColor(d.state == Download.STATE_FAILED ? Color.WHITE : ink);
+            number.setPadding(dp(8), dp(5), dp(8), dp(5));
+            card.addView(number, new LinearLayout.LayoutParams(-2, -2));
             String name = new String(d.request.data, StandardCharsets.UTF_8);
-            card.addView(text(name.isEmpty() ? "视频" : name, 17, ink));
+            TextView nameView = text(name.isEmpty() ? "视频" : name, 20, ink);
+            nameView.setTypeface(null, Typeface.BOLD);
+            add(card, nameView, 12);
             TextView detail = text("", 13, green);
             rowStatus.put(d.request.id, detail);
             add(card, detail, 6);
             ProgressBar progress = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
             progress.setMax(100);
+            progress.setProgressTintList(android.content.res.ColorStateList.valueOf(Bauhaus.BLUE));
+            progress.setProgressBackgroundTintList(android.content.res.ColorStateList.valueOf(Bauhaus.PAPER));
             rowProgress.put(d.request.id, progress);
             progress.setProgress(d.state == Download.STATE_COMPLETED ? 100 : Math.max(0, (int) d.getPercentDownloaded()));
             progress.setIndeterminate(d.state == Download.STATE_DOWNLOADING && d.getPercentDownloaded() < 0);
@@ -340,18 +350,20 @@ public final class MainActivity extends Activity {
     private LinearLayout row() { LinearLayout v = new LinearLayout(this); v.setOrientation(LinearLayout.HORIZONTAL); return v; }
     private LinearLayout card() {
         LinearLayout v = column(); v.setPadding(dp(16), dp(16), dp(16), dp(16));
-        GradientDrawable bg = new GradientDrawable(); bg.setColor(Color.WHITE); bg.setCornerRadius(dp(18)); v.setBackground(bg); return v;
+        v.setBackground(Bauhaus.panel(this, Color.rgb(255, 252, 245), 2)); return v;
     }
     private TextView text(String value, int size, int color) {
         TextView v = new TextView(this); v.setText(value); v.setTextSize(size); v.setTextColor(color); return v;
     }
     private Button button(String label, boolean primary, View.OnClickListener click) {
-        Button b = new Button(this); b.setText(label); b.setTextSize(14); b.setAllCaps(false);
-        b.setTextColor(primary ? Color.WHITE : green);
-        b.setBackgroundTintList(android.content.res.ColorStateList.valueOf(primary ? green : Color.rgb(230, 242, 237)));
+        Button b = new Button(this); b.setText(label);
+        Bauhaus.button(b, primary ? Bauhaus.BLUE : Bauhaus.PAPER, primary ? Color.WHITE : ("删除".equals(label) ? Bauhaus.RED : ink));
         b.setOnClickListener(click); return b;
     }
-    private LinearLayout.LayoutParams weighted() { return new LinearLayout.LayoutParams(0, dp(50), 1); }
+    private LinearLayout.LayoutParams weighted() {
+        LinearLayout.LayoutParams size = new LinearLayout.LayoutParams(0, dp(50), 1);
+        size.setMargins(dp(3), 0, dp(3), 0); return size;
+    }
     private void add(LinearLayout parent, View child, int margin) {
         LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-1, -2); p.topMargin = dp(margin); parent.addView(child, p);
     }
