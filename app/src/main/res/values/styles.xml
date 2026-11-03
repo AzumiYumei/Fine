@@ -1,4 +1,13 @@
 <resources>
+    <string name="app_name" translatable="false">Fine</string>
+    <color name="fine_forest">#183F36</color>
+    <style name="LaunchTheme" parent="LaunchThemeBase" />
+    <style name="LaunchThemeBase" parent="AppTheme">
+        <item name="android:windowBackground">@drawable/fine_launch</item>
+        <item name="android:statusBarColor">@color/fine_forest</item>
+        <item name="android:navigationBarColor">@color/fine_forest</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
     <style name="AppTheme" parent="BaseTheme" />
     <style name="BaseTheme" parent="android:style/Theme.Material.Light.NoActionBar">
         <item name="android:fontFamily">sans</item>

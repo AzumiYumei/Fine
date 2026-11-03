@@ -1,0 +1,6 @@
+<resources>
+    <style name="LaunchTheme" parent="LaunchThemeBase">
+        <item name="android:windowSplashScreenBackground">@color/fine_forest</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/fine_mark</item>
+    </style>
+</resources>

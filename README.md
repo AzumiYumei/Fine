@@ -1,4 +1,6 @@
-# Fine 轻播
+# Fine
+
+![Fine](docs/fine-cover.svg)
 
 轻量 Android M3U8 播放与离线下载应用，支持 Android 6.0 及以上。
 

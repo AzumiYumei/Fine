@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" width="1280" height="720" role="img" aria-labelledby="title">
+  <title id="title">Fine</title>
+  <defs>
+    <linearGradient id="forest" x2="1" y2=".8" gradientUnits="objectBoundingBox">
+      <stop stop-color="#244F45"/><stop offset=".55" stop-color="#183F36"/><stop offset="1" stop-color="#10352D"/>
+    </linearGradient>
+  </defs>
+  <rect width="1280" height="720" fill="url(#forest)"/>
+  <g fill="none" stroke="#B6DCC9" stroke-opacity=".14" stroke-width="1.5">
+    <path transform="translate(0 -57)" d="M-390 800 C30 590 130 770 415 830" />
+    <path d="M735 -90 C1170 -45 1120 195 1370 280" />
+    <path transform="translate(0 -57)" d="M-371 800 C45 590 146 770 432 830" />
+    <path d="M750 -90 C1184 -45 1135 195 1385 280" />
+    <path transform="translate(0 -57)" d="M-352 800 C60 590 162 770 449 830" />
+    <path d="M765 -90 C1198 -45 1150 195 1400 280" />
+    <path transform="translate(0 -57)" d="M-333 800 C75 590 178 770 466 830" />
+    <path d="M780 -90 C1212 -45 1165 195 1415 280" />
+    <path transform="translate(0 -57)" d="M-314 800 C90 590 194 770 483 830" />
+    <path d="M795 -90 C1226 -45 1180 195 1430 280" />
+    <path transform="translate(0 -57)" d="M-295 800 C105 590 210 770 500 830" />
+    <path d="M810 -90 C1240 -45 1195 195 1445 280" />
+    <path transform="translate(0 -57)" d="M-276 800 C120 590 226 770 517 830" />
+    <path d="M825 -90 C1254 -45 1210 195 1460 280" />
+    <path transform="translate(0 -57)" d="M-257 800 C135 590 242 770 534 830" />
+    <path d="M840 -90 C1268 -45 1225 195 1475 280" />
+    <path transform="translate(0 -57)" d="M-238 800 C150 590 258 770 551 830" />
+    <path d="M855 -90 C1282 -45 1240 195 1490 280" />
+    <path transform="translate(0 -57)" d="M-219 800 C165 590 274 770 568 830" />
+    <path d="M870 -90 C1296 -45 1255 195 1505 280" />
+    <path transform="translate(0 -57)" d="M-200 800 C180 590 290 770 585 830" />
+    <path d="M885 -90 C1310 -45 1270 195 1520 280" />
+    <path transform="translate(0 -57)" d="M-181 800 C195 590 306 770 602 830" />
+    <path d="M900 -90 C1324 -45 1285 195 1535 280" />
+  </g>
+  <g transform="translate(247 133) scale(3.95)" fill="#F5F4E9">
+    <path d="M34,36 Q34,32 38,32 H78 L70,43 H46 V75 L34,83 Z"/>
+    <path d="M46,47 L66,57 L46,67 Z" fill="#A9E4C2"/>
+    <g transform="translate(7 0)">
+    <circle cx="78" cy="39" r="5.5"/><path d="M73 50 H83 V80 H73 Z"/>
+    <path d="M90 50 H99 V54 Q103 49 110 49 Q122 49 122 62 V80 H112 V64 Q112 57 107 57 Q100 57 100 65 V80 H90 Z"/>
+    <path fill-rule="evenodd" d="M158 67 H136 Q137 74 145 74 Q151 74 155 71 L158 77 Q152 81 144 81 Q126 81 126 65 Q126 49 143 49 Q159 49 158 67 Z M136 61 H149 Q148 55 143 55 Q138 55 136 61 Z"/>
+    </g>
+  </g>
+</svg>

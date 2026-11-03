@@ -47,6 +47,7 @@ public final class MainActivity extends Activity {
     };
 
     @Override public void onCreate(Bundle state) {
+        setTheme(R.style.AppTheme);
         super.onCreate(state);
         app = (FineApp) getApplication();
         buildUi();
