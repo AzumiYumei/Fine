@@ -1,4 +1,14 @@
 <resources>
+    <item name="history_search" type="id" />
+    <item name="history_list" type="id" />
+    <item name="browser_history" type="id" />
+    <item name="browser_toolbar" type="id" />
+    <item name="browser_menu" type="id" />
+    <item name="browser_home" type="id" />
+    <item name="browser_tabs" type="id" />
+    <item name="browser_address" type="id" />
+    <item name="browser_web" type="id" />
+    <item name="browser_resources" type="id" />
     <item name="download_page" type="id" />
     <item name="library_page" type="id" />
     <item name="download_tab" type="id" />

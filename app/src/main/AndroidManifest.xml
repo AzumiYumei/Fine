@@ -9,16 +9,33 @@
         android:icon="@mipmap/ic_fine" android:theme="@style/AppTheme"
         android:allowBackup="false" android:fullBackupContent="false" android:dataExtractionRules="@xml/data_extraction_rules"
         android:supportsRtl="true" android:usesCleartextTraffic="true">
-        <activity android:name=".MainActivity" android:exported="true" android:launchMode="singleTop"
+        <activity android:name=".MainActivity" android:exported="false" android:launchMode="singleTop"
+            android:theme="@style/LaunchTheme"
+            android:configChanges="orientation|screenSize|keyboardHidden" />
+        <activity android:name=".BrowserActivity" android:exported="true" android:launchMode="singleTop"
             android:theme="@style/LaunchTheme"
             android:configChanges="orientation|screenSize|keyboardHidden">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="http" />
+                <data android:scheme="https" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
         </activity>
         <activity android:name=".PlayerActivity" android:exported="false"
             android:configChanges="orientation|screenSize|keyboardHidden" />
+        <activity android:name=".MediaPreviewActivity" android:exported="false" />
+        <activity android:name=".HistoryActivity" android:exported="false" />
         <service android:name=".FileTaskService" android:exported="false" android:foregroundServiceType="dataSync" />
         <service android:name=".VideoDownloadService" android:exported="false"
             android:foregroundServiceType="dataSync" />

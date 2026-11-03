@@ -57,6 +57,7 @@ public final class MainActivity extends Activity {
             title.setText(state.getString("title", ""));
         }
         showPage(state != null ? state.getInt("page", 0) : getIntent().getIntExtra("page", 0));
+        if (state == null) receiveResource(getIntent());
         app.downloads();
         DownloadService.sendResumeDownloads(this, VideoDownloadService.class, false);
     }
@@ -64,6 +65,8 @@ public final class MainActivity extends Activity {
     private void buildUi() {
         LinearLayout shell = column();
         shell.setBackgroundColor(QuietStyle.PAPER);
+        shell.addView(button("返回浏览器", false, v -> startActivity(new android.content.Intent(this, BrowserActivity.class)
+                .addFlags(android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP | android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP))));
         FrameLayout pages = new FrameLayout(this);
         shell.addView(pages, new LinearLayout.LayoutParams(-1, 0, 1));
         downloadPage = new ScrollView(this);
@@ -213,6 +216,19 @@ public final class MainActivity extends Activity {
     }
     @Override protected void onNewIntent(android.content.Intent intent) {
         super.onNewIntent(intent); setIntent(intent); showPage(intent.getIntExtra("page", page));
+        receiveResource(intent);
+    }
+    private void receiveResource(android.content.Intent intent) {
+        String resource = intent.getStringExtra("sniffed_url");
+        if (resource == null) return;
+        try {
+            url.setText(Links.normalize(resource));
+            title.setText(intent.getStringExtra("sniffed_title"));
+            showPage(0);
+            if (intent.getBooleanExtra("start_download", false)) download();
+        } catch (IllegalArgumentException e) { message("资源链接无效"); }
+        intent.removeExtra("sniffed_url"); intent.removeExtra("sniffed_title");
+        intent.removeExtra("start_download");
     }
     @Override public void onBackPressed() {
         if (page != 0) showPage(0); else super.onBackPressed();
